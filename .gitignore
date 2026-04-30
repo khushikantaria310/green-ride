@@ -1,6 +1,16 @@
+cat <<EOF > .gitignore
+# Node / Next.js
 node_modules/
-.env
-dist/
 .next/
-*.log
-docker-compose.override.yml
+out/
+
+# Python
+backend/venv/
+backend/__pycache__/
+*.pyc
+.env
+
+# Databases
+*.db
+*.sqlite3
+EOF
