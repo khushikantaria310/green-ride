@@ -30,10 +30,10 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Green Ride API")
 
 # --- 4. CORS MIDDLEWARE (REQUIRED FOR FRONTEND) ---
-# This allows your Next.js/React app to fetch data from this server
+# FIXED: Replaced "*" with the specific Next.js local URL.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins for local development
+    allow_origins=["http://localhost:3000"],  # Explicitly allow your frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -88,8 +88,8 @@ def get_nearby_stations(lat: float, lon: float, db: Session = Depends(get_db)):
     results = []
 
     for s in stations:
-        # Wrap the attributes in float() to satisfy the type checker
-        dist = calculate_distance(lat, lon, s.latitude, s.longitude)  # type:ignore
+        # Cast to float to satisfy math.radians and avoid type errors
+        dist = calculate_distance(lat, lon, float(s.latitude), float(s.longitude))  # type:ignore
         results.append(
             {
                 "id": s.id,
