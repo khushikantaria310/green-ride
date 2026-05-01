@@ -1,13 +1,15 @@
-body, html {
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  background-color: #000;
-  font-family: 'Geist Sans', sans-serif;
-  color: #fff;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
 }
 
-.app-container {
-  width: 100vw;
-  height: 100vh;
+body {
+  margin: 0;
+  background-color: #0a0b10; /* status-bg */
+  color: white;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }

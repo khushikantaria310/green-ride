@@ -8,15 +8,16 @@ import bcrypt
 import socketio
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
 from pydantic import BaseModel
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
-from sqlalchemy import create_engine, Column, Integer, String, Float
-from sqlalchemy.orm import sessionmaker, Session, declarative_base
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session, DeclarativeBase, Mapped, mapped_column
 
 # --- 1. ENVIRONMENT & SECURITY CONFIG ---
 load_dotenv()
@@ -41,54 +42,64 @@ engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
 
 
-# --- 2. DATA MODELS ---
+# New SQLAlchemy 2.0 Base class
+class Base(DeclarativeBase):
+    pass
+
+
+# --- 2. DATA MODELS (SQLAlchemy 2.0 Type-Safe Syntax) ---
 class User(Base):
     __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    email: Mapped[str] = mapped_column(unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column()
 
 
 class Station(Base):
     __tablename__ = "stations"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String)
-    latitude = Column(Float)
-    longitude = Column(Float)
-    available_slots = Column(Integer, default=10)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    name: Mapped[str] = mapped_column()
+    latitude: Mapped[float] = mapped_column()
+    longitude: Mapped[float] = mapped_column()
+    available_slots: Mapped[int] = mapped_column(default=10)
 
 
 class Booking(Base):
     __tablename__ = "bookings"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, index=True)
-    station_id = Column(Integer, index=True)
-    status = Column(String, default="pending")
-    created_at = Column(String, default=lambda: datetime.now(timezone.utc).isoformat())
-    expires_at = Column(String)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(index=True)
+    station_id: Mapped[int] = mapped_column(index=True)
+    status: Mapped[str] = mapped_column(default="pending")
+    created_at: Mapped[str] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).isoformat()
+    )
+    expires_at: Mapped[str] = mapped_column()
 
 
 class Payment(Base):
     __tablename__ = "payments"
-    id = Column(Integer, primary_key=True, index=True)
-    booking_id = Column(Integer, index=True)
-    amount = Column(Float)
-    status = Column(String)
-    upi_ref = Column(String, unique=True, nullable=True)
-    created_at = Column(String, default=lambda: datetime.now(timezone.utc).isoformat())
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    booking_id: Mapped[int] = mapped_column(index=True)
+    amount: Mapped[float] = mapped_column()
+    status: Mapped[str] = mapped_column()
+    upi_ref: Mapped[Optional[str]] = mapped_column(unique=True, nullable=True)
+    created_at: Mapped[str] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
 
 class Feedback(Base):
     __tablename__ = "feedback"
-    id = Column(Integer, primary_key=True, index=True)
-    station_id = Column(Integer, index=True)
-    user_id = Column(Integer)
-    rating = Column(Integer)
-    comment = Column(String, nullable=True)
-    created_at = Column(String, default=lambda: datetime.now(timezone.utc).isoformat())
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    station_id: Mapped[int] = mapped_column(index=True)
+    user_id: Mapped[int] = mapped_column()
+    rating: Mapped[int] = mapped_column()
+    comment: Mapped[Optional[str]] = mapped_column(nullable=True)
+    created_at: Mapped[str] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
 
 # --- 3. PYDANTIC SCHEMAS ---
@@ -103,8 +114,95 @@ class FeedbackCreate(BaseModel):
     comment: Optional[str] = None
 
 
-# --- 4. FASTAPI & SOCKET.IO SETUP ---
-app = FastAPI(title="Green Ride API — Phase 2 Final")
+# --- 4. BACKGROUND TASKS ---
+async def simulate_station_activity(sio_server):
+    while True:
+        await asyncio.sleep(60)
+        db = SessionLocal()
+        try:
+            stations = db.query(Station).all()
+            updates = []
+            for s in stations:
+                s.available_slots = random.randint(0, 15)
+                updates.append({"id": s.id, "slots": s.available_slots})
+            db.commit()
+            await sio_server.emit("availability_update", updates)
+            print(
+                f"🔄 [{datetime.now().strftime('%H:%M:%S')}] Broadcasted Simulation Tick."
+            )
+        except Exception as e:
+            print(f"❌ Simulation Error: {e}")
+        finally:
+            db.close()
+
+
+async def clear_expired_bookings():
+    while True:
+        await asyncio.sleep(120)
+        db = SessionLocal()
+        try:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            expired_bookings = (
+                db.query(Booking)
+                .filter(Booking.status == "pending", Booking.expires_at < now_iso)
+                .all()
+            )
+            for b in expired_bookings:
+                b.status = "expired"
+                station = db.query(Station).filter(Station.id == b.station_id).first()
+                if station:
+                    station.available_slots += 1
+            if expired_bookings:
+                db.commit()
+                print(f"🧹 Cleared {len(expired_bookings)} expired bookings.")
+        except Exception as e:
+            print(f"❌ Expiry Cron Error: {e}")
+        finally:
+            db.close()
+
+
+# --- 5. LIFESPAN HANDLER ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        if db.query(Station).count() == 0:
+            print("🌱 Seeding initial charging stations...")
+            sample_stations = [
+                Station(
+                    name="Indiranagar Hub",
+                    latitude=12.9716,
+                    longitude=77.5946,
+                    available_slots=10,
+                ),
+                Station(
+                    name="Koramangala Point",
+                    latitude=12.9352,
+                    longitude=77.6245,
+                    available_slots=5,
+                ),
+                Station(
+                    name="MG Road Station",
+                    latitude=12.9733,
+                    longitude=77.6117,
+                    available_slots=8,
+                ),
+            ]
+            db.add_all(sample_stations)
+            db.commit()
+    finally:
+        db.close()
+
+    task1 = asyncio.create_task(simulate_station_activity(sio))
+    task2 = asyncio.create_task(clear_expired_bookings())
+    yield
+    task1.cancel()
+    task2.cancel()
+
+
+# --- 6. FASTAPI & SOCKET.IO SETUP ---
+app = FastAPI(title="Green Ride API", lifespan=lifespan)
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 socket_app = socketio.ASGIApp(sio, app)
 
@@ -116,10 +214,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-Base.metadata.create_all(bind=engine)
 
-
-# --- 5. UTILITIES & AUTH ---
+# --- 7. UTILITIES & AUTH ---
 def get_db():
     db = SessionLocal()
     try:
@@ -161,93 +257,10 @@ def get_current_user(
     return user
 
 
-# --- 6. BACKGROUND TASKS ---
-async def simulate_station_activity():
-    """Task 2.7 & 2.9: Randomize slots and broadcast via Socket.IO"""
-    while True:
-        await asyncio.sleep(60)
-        db = SessionLocal()
-        try:
-            stations = db.query(Station).all()
-            updates = []
-            for s in stations:
-                s.available_slots = random.randint(0, 15)  # type: ignore
-                updates.append({"id": s.id, "slots": s.available_slots})
-            db.commit()
-            await sio.emit("availability_update", updates)
-            print(
-                f"🔄 [{datetime.now().strftime('%H:%M:%S')}] Broadcasted Simulation Tick."
-            )
-        except Exception as e:
-            print(f"❌ Simulation Error: {e}")
-        finally:
-            db.close()
-
-
-async def clear_expired_bookings():
-    """Task 2.8: Cleanup expired pending bookings"""
-    while True:
-        await asyncio.sleep(120)
-        db = SessionLocal()
-        try:
-            now_iso = datetime.now(timezone.utc).isoformat()
-            expired_bookings = (
-                db.query(Booking)
-                .filter(Booking.status == "pending", Booking.expires_at < now_iso)
-                .all()
-            )
-            for b in expired_bookings:
-                b.status = "expired"  # type: ignore
-                station = db.query(Station).filter(Station.id == b.station_id).first()
-                if station:
-                    station.available_slots += 1  # type: ignore
-            if expired_bookings:
-                db.commit()
-                print(f"🧹 Cleared {len(expired_bookings)} expired bookings.")
-        except Exception as e:
-            print(f"❌ Expiry Cron Error: {e}")
-        finally:
-            db.close()
-
-
-@app.on_event("startup")
-async def startup_event():
-    db = SessionLocal()
-    try:
-        if db.query(Station).count() == 0:
-            print("🌱 Seeding initial charging stations...")
-            sample_stations = [
-                Station(
-                    name="Indiranagar Hub",
-                    latitude=12.9716,
-                    longitude=77.5946,
-                    available_slots=10,
-                ),
-                Station(
-                    name="Koramangala Point",
-                    latitude=12.9352,
-                    longitude=77.6245,
-                    available_slots=5,
-                ),
-                Station(
-                    name="MG Road Station",
-                    latitude=12.9733,
-                    longitude=77.6117,
-                    available_slots=8,
-                ),
-            ]
-            db.add_all(sample_stations)
-            db.commit()
-    finally:
-        db.close()
-    asyncio.create_task(simulate_station_activity())
-    asyncio.create_task(clear_expired_bookings())
-
-
-# --- 7. ROUTES ---
+# --- 8. ROUTES ---
 @app.get("/")
 def health_check():
-    return {"status": "online", "message": "Green Ride API Phase 2 Complete"}
+    return {"status": "online", "message": "Green Ride API Fully Operational"}
 
 
 @app.post("/auth/register")
@@ -283,8 +296,8 @@ def get_nearby_stations(lat: float, lon: float, db: Session = Depends(get_db)):
             "id": s.id,
             "name": s.name,
             "distance_km": round(
-                calculate_distance(lat, lon, float(s.latitude), float(s.longitude)), 2
-            ),  # type: ignore
+                calculate_distance(lat, lon, s.latitude, s.longitude), 2
+            ),
             "available_slots": s.available_slots,
             "coordinates": {"lat": s.latitude, "lng": s.longitude},
         }
@@ -300,9 +313,9 @@ def create_booking(
     db: Session = Depends(get_db),
 ):
     station = db.query(Station).filter(Station.id == station_id).first()
-    if not station or int(station.available_slots) <= 0:  # type: ignore
+    if not station or station.available_slots <= 0:
         raise HTTPException(status_code=400, detail="Station unavailable")
-    station.available_slots -= 1  # type: ignore
+    station.available_slots -= 1
     new_booking = Booking(
         user_id=current_user.id,
         station_id=station_id,
@@ -325,11 +338,11 @@ async def process_payment(
         .filter(Booking.id == booking_id, Booking.user_id == current_user.id)
         .first()
     )
-    if not booking or str(booking.status) != "pending":
+    if not booking or booking.status != "pending":
         raise HTTPException(status_code=400, detail="Invalid booking")
     await asyncio.sleep(2)
     if random.random() < 0.95:
-        booking.status = "confirmed"  # type: ignore
+        booking.status = "confirmed"
         db.add(
             Payment(
                 booking_id=booking.id,
@@ -363,9 +376,7 @@ def submit_feedback(
     return {"status": "success"}
 
 
-# --- 8. RUNNER ---
 if __name__ == "__main__":
     import uvicorn
 
-    # Use string reference "main:socket_app" to allow reload and Socket.IO integration
     uvicorn.run("main:socket_app", host="0.0.0.0", port=5000, reload=True)
