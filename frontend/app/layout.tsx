@@ -1,37 +1,23 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+"use client";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-export const metadata: Metadata = {
-  title: "Green Ride | Secure EV Infrastructure",
-  description: "Private and secure battery swapping network.",
-};
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useState } from 'react';
+import './globals.css'; 
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: {
+  children: React.ReactNode
+}) {
+  // Create a query client once per session to hold our live socket data
+  const [queryClient] = useState(() => new QueryClient());
+
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
-    >
-      <body className="min-h-full bg-status-bg text-white font-sans selection:bg-status-blue/30">
-        {/* Main wrapper to ensure layout fills screen and respects the status-bg color */}
-        <div className="relative flex min-h-screen flex-col overflow-x-hidden">
+    <html lang="en">
+      <body>
+        <QueryClientProvider client={queryClient}>
           {children}
-        </div>
+        </QueryClientProvider>
       </body>
     </html>
   );

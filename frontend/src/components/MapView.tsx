@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { io } from 'socket.io-client'; // Import Socket.IO
+
+// 🔥 IMPORT THE TANSTACK QUERY HOOK
+import { useStations } from '../hooks/useNetwork'; 
 
 // Fix for default Leaflet icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -24,48 +25,37 @@ const createCustomIcon = (slots: number) => {
   });
 };
 
-interface Station {
-  id: number;
-  name: string;
-  distance_km: number;
-  available_slots: number;
-  coordinates: { lat: number; lng: number };
-}
-
 interface MapViewProps {
   onSelectStation: (station: any) => void;
 }
 
 export default function MapView({ onSelectStation }: MapViewProps) {
-  const [stations, setStations] = useState<Station[]>([]);
   const center = { lat: 12.9716, lng: 77.5946 };
+  
+  // 🔥 FETCH LIVE DATA FROM TANSTACK QUERY CACHE
+  const { data: stations, isLoading, isError } = useStations();
 
-  // 1. Fetch Initial Data
-  useEffect(() => {
-    fetch(`http://localhost:5000/api/stations/nearby?lat=${center.lat}&lon=${center.lng}`)
-      .then(res => res.json())
-      .then(data => setStations(data))
-      .catch(err => console.error("Failed to fetch stations:", err));
-  }, []);
+  // Handle graceful loading state
+  if (isLoading) {
+    return (
+      <div className="w-full h-[600px] flex flex-col items-center justify-center bg-[#161921] rounded-[40px]">
+        <div className="w-12 h-12 border-4 border-white/10 border-t-[#4d6af2] rounded-full animate-spin mb-4" />
+        <p className="font-bold tracking-widest uppercase text-xs text-gray-400">Syncing Network Nodes...</p>
+      </div>
+    );
+  }
 
-  // 2. Listen for Real-Time Socket Updates (Task 4.2)
-  useEffect(() => {
-    const socket = io('http://localhost:5000');
-    
-    socket.on('availability_update', (updates: { id: number, slots: number }[]) => {
-      console.log("Live update received:", updates);
-      setStations(prevStations => 
-        prevStations.map(station => {
-          const update = updates.find(u => u.id === station.id);
-          return update ? { ...station, available_slots: update.slots } : station;
-        })
-      );
-    });
+  // Handle error state
+  if (isError) {
+    return (
+      <div className="w-full h-[600px] flex items-center justify-center bg-[#161921] rounded-[40px] text-red-500 font-bold">
+        Failed to connect to the energy network. Ensure your backend is running.
+      </div>
+    );
+  }
 
-    return () => {
-      socket.disconnect(); // Cleanup on unmount
-    };
-  }, []);
+  // Ensure stations fallback to empty array if undefined
+  const activeStations = stations || [];
 
   return (
     <div className="w-full h-[600px] rounded-[40px] overflow-hidden relative z-0">
@@ -79,7 +69,7 @@ export default function MapView({ onSelectStation }: MapViewProps) {
           attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
         />
         
-        {stations.map(station => (
+        {activeStations.map((station: any) => (
           <Marker 
             key={station.id} 
             position={[station.coordinates.lat, station.coordinates.lng]}
