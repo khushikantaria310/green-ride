@@ -204,7 +204,6 @@ async def lifespan(app: FastAPI):
 # --- 6. FASTAPI & SOCKET.IO SETUP ---
 app = FastAPI(title="Green Ride API", lifespan=lifespan)
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
-socket_app = socketio.ASGIApp(sio, app)
 
 app.add_middleware(
     CORSMiddleware,
@@ -376,7 +375,14 @@ def submit_feedback(
     return {"status": "success"}
 
 
+# --- 9. FINAL ASGI WRAPPER ---
+# 🐛 FIX: We wrap the FastAPI 'app' with Socket.IO down here.
+# By reassigning it back to 'app', your usual command ('uvicorn main:app')
+# will magically run BOTH the API and the WebSockets simultaneously!
+_fastapi_app = app
+app = socketio.ASGIApp(sio, _fastapi_app)
+
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:socket_app", host="0.0.0.0", port=5000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)
