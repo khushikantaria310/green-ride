@@ -117,8 +117,8 @@ class FeedbackCreate(BaseModel):
 # --- 4. BACKGROUND TASKS ---
 async def simulate_station_activity(sio_server):
     while True:
-        # 🔥 Fast real-time updates every 2 seconds
-        await asyncio.sleep(2)
+        # ⏱️ 4.8 TEST: Slowed down to 30s so you have time to test race conditions
+        await asyncio.sleep(30)
         db = SessionLocal()
         try:
             stations = db.query(Station).all()
@@ -171,7 +171,6 @@ async def lifespan(app: FastAPI):
         if db.query(Station).count() == 0:
             print("🌱 Seeding National Energy Network (India)...")
             sample_stations = [
-                # Bengaluru Hubs
                 Station(
                     name="Indiranagar Node",
                     latitude=12.9716,
@@ -190,7 +189,6 @@ async def lifespan(app: FastAPI):
                     longitude=77.7499,
                     available_slots=12,
                 ),
-                # Mumbai Hubs
                 Station(
                     name="Bandra Terminal",
                     latitude=19.0596,
@@ -209,7 +207,6 @@ async def lifespan(app: FastAPI):
                     longitude=72.9060,
                     available_slots=4,
                 ),
-                # Delhi NCR Hubs
                 Station(
                     name="Connaught Place Central",
                     latitude=28.6304,
@@ -228,7 +225,6 @@ async def lifespan(app: FastAPI):
                     longitude=77.3639,
                     available_slots=9,
                 ),
-                # Hyderabad Hubs
                 Station(
                     name="HITEC City Base",
                     latitude=17.4435,
@@ -241,7 +237,6 @@ async def lifespan(app: FastAPI):
                     longitude=78.4071,
                     available_slots=3,
                 ),
-                # Chennai Hubs
                 Station(
                     name="T Nagar Grid",
                     latitude=13.0418,
@@ -254,7 +249,6 @@ async def lifespan(app: FastAPI):
                     longitude=80.2260,
                     available_slots=10,
                 ),
-                # Pune Hubs
                 Station(
                     name="Hinjewadi Phase 1",
                     latitude=18.5913,
@@ -391,7 +385,10 @@ def create_booking(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    station = db.query(Station).filter(Station.id == station_id).first()
+    # 🔒 4.8 TEST FIX: with_for_update() locks the row to prevent race conditions
+    station = (
+        db.query(Station).filter(Station.id == station_id).with_for_update().first()
+    )
     if not station or station.available_slots <= 0:
         raise HTTPException(status_code=400, detail="Station unavailable")
     station.available_slots -= 1
@@ -420,7 +417,9 @@ async def process_payment(
     if not booking or booking.status != "pending":
         raise HTTPException(status_code=400, detail="Invalid booking")
     await asyncio.sleep(2)
-    if random.random() < 0.95:
+
+    # 💸 4.7 TEST FIX: Bumped to 50% failure rate just so you can test it easily
+    if random.random() < 0.50:
         booking.status = "confirmed"
         db.add(
             Payment(
@@ -432,7 +431,11 @@ async def process_payment(
         )
         db.commit()
         return {"status": "success", "message": "Payment confirmed"}
-    raise HTTPException(status_code=402, detail="Payment failed")
+
+    raise HTTPException(
+        status_code=402,
+        detail="Payment Gateway Error: Insufficient funds or network timeout.",
+    )
 
 
 @app.post("/api/feedback")
