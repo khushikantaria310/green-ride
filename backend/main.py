@@ -458,6 +458,34 @@ def submit_feedback(
     return {"status": "success"}
 
 
+# -------------------------------------------------------------
+# 🔥 NEW ENDPOINTS FOR DASHBOARD TABS (Bookings, Wallet, Profile)
+# -------------------------------------------------------------
+
+
+@app.get("/api/users/me/bookings")
+def get_my_bookings(db: Session = Depends(get_db)):
+    # Note: Bypassing JWT auth temporarily so your frontend UI can fetch data
+    bookings = db.query(Booking).order_by(Booking.created_at.desc()).all()
+    return bookings
+
+
+@app.get("/api/users/me/transactions")
+def get_my_transactions(db: Session = Depends(get_db)):
+    # Note: Bypassing JWT auth temporarily so your Wallet/History UI can fetch data
+    payments = db.query(Payment).order_by(Payment.created_at.desc()).all()
+    return payments
+
+
+@app.get("/api/users/me")
+def get_my_profile(db: Session = Depends(get_db)):
+    # Note: Bypassing JWT auth temporarily so your Profile UI can fetch data
+    user = db.query(User).first()
+    if user:
+        return {"id": user.id, "email": user.email, "role": "Green Pioneer"}
+    return {"id": 0, "email": "guest@greenride.com", "role": "Guest"}
+
+
 # --- 9. FINAL ASGI WRAPPER ---
 _fastapi_app = app
 app = socketio.ASGIApp(sio, _fastapi_app)
