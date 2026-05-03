@@ -117,7 +117,8 @@ class FeedbackCreate(BaseModel):
 # --- 4. BACKGROUND TASKS ---
 async def simulate_station_activity(sio_server):
     while True:
-        await asyncio.sleep(60)
+        # 🔥 Fast real-time updates every 2 seconds
+        await asyncio.sleep(2)
         db = SessionLocal()
         try:
             stations = db.query(Station).all()
@@ -128,7 +129,7 @@ async def simulate_station_activity(sio_server):
             db.commit()
             await sio_server.emit("availability_update", updates)
             print(
-                f"🔄 [{datetime.now().strftime('%H:%M:%S')}] Broadcasted Simulation Tick."
+                f"⚡ [{datetime.now().strftime('%H:%M:%S')}] Live Sync: {len(updates)} nodes updated."
             )
         except Exception as e:
             print(f"❌ Simulation Error: {e}")
@@ -168,10 +169,11 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         if db.query(Station).count() == 0:
-            print("🌱 Seeding initial charging stations...")
+            print("🌱 Seeding National Energy Network (India)...")
             sample_stations = [
+                # Bengaluru Hubs
                 Station(
-                    name="Indiranagar Hub",
+                    name="Indiranagar Node",
                     latitude=12.9716,
                     longitude=77.5946,
                     available_slots=10,
@@ -183,14 +185,92 @@ async def lifespan(app: FastAPI):
                     available_slots=5,
                 ),
                 Station(
-                    name="MG Road Station",
-                    latitude=12.9733,
-                    longitude=77.6117,
+                    name="Whitefield Grid",
+                    latitude=12.9698,
+                    longitude=77.7499,
+                    available_slots=12,
+                ),
+                # Mumbai Hubs
+                Station(
+                    name="Bandra Terminal",
+                    latitude=19.0596,
+                    longitude=72.8295,
                     available_slots=8,
+                ),
+                Station(
+                    name="Andheri East Sync",
+                    latitude=19.1136,
+                    longitude=72.8697,
+                    available_slots=15,
+                ),
+                Station(
+                    name="Powai Valley",
+                    latitude=19.1176,
+                    longitude=72.9060,
+                    available_slots=4,
+                ),
+                # Delhi NCR Hubs
+                Station(
+                    name="Connaught Place Central",
+                    latitude=28.6304,
+                    longitude=77.2177,
+                    available_slots=6,
+                ),
+                Station(
+                    name="Gurugram Cyber City",
+                    latitude=28.4906,
+                    longitude=77.0866,
+                    available_slots=14,
+                ),
+                Station(
+                    name="Noida Sector 62",
+                    latitude=28.6208,
+                    longitude=77.3639,
+                    available_slots=9,
+                ),
+                # Hyderabad Hubs
+                Station(
+                    name="HITEC City Base",
+                    latitude=17.4435,
+                    longitude=78.3772,
+                    available_slots=11,
+                ),
+                Station(
+                    name="Jubilee Hills",
+                    latitude=17.4326,
+                    longitude=78.4071,
+                    available_slots=3,
+                ),
+                # Chennai Hubs
+                Station(
+                    name="T Nagar Grid",
+                    latitude=13.0418,
+                    longitude=80.2341,
+                    available_slots=7,
+                ),
+                Station(
+                    name="OMR Tech Park",
+                    latitude=12.9056,
+                    longitude=80.2260,
+                    available_slots=10,
+                ),
+                # Pune Hubs
+                Station(
+                    name="Hinjewadi Phase 1",
+                    latitude=18.5913,
+                    longitude=73.7389,
+                    available_slots=13,
+                ),
+                Station(
+                    name="Koregaon Park",
+                    latitude=18.5362,
+                    longitude=73.8939,
+                    available_slots=5,
                 ),
             ]
             db.add_all(sample_stations)
             db.commit()
+            print("✅ National Network Seeded Successfully!")
     finally:
         db.close()
 
@@ -376,9 +456,6 @@ def submit_feedback(
 
 
 # --- 9. FINAL ASGI WRAPPER ---
-# 🐛 FIX: We wrap the FastAPI 'app' with Socket.IO down here.
-# By reassigning it back to 'app', your usual command ('uvicorn main:app')
-# will magically run BOTH the API and the WebSockets simultaneously!
 _fastapi_app = app
 app = socketio.ASGIApp(sio, _fastapi_app)
 
