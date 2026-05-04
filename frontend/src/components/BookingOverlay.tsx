@@ -78,9 +78,10 @@ export default function BookingOverlay({ station, onClose, onConfirm }: BookingO
           </div>
 
           <button 
+            // 🔥 FIX: Trigger onConfirm immediately without the fake timeout!
             onClick={() => {
               setIsReserving(true);
-              setTimeout(onConfirm, 1000); // Simulate network delay
+              onConfirm(); 
             }}
             disabled={isReserving || station.available_slots === 0}
             className="w-full bg-[#4d6af2] text-white py-5 rounded-full font-bold uppercase tracking-widest text-xs hover:brightness-110 transition-all shadow-lg shadow-blue-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
