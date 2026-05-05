@@ -4,14 +4,13 @@ import { io, Socket } from 'socket.io-client';
 import { api } from '../lib/api';
 
 // ==========================================
-// 4.3: TANSTACK QUERY HOOKS
+// TANSTACK QUERY HOOKS (Existing)
 // ==========================================
 
 export const useStations = () => {
   return useQuery({
     queryKey: ['stations'],
     queryFn: async () => {
-      // 🐛 FIX 1: Point directly to your backend's actual nearby route
       const { data } = await api.get('/api/stations/nearby?lat=12.9716&lon=77.5946');
       return data;
     }
@@ -22,11 +21,10 @@ export const useStation = (stationId: string | null) => {
   return useQuery({
     queryKey: ['station', stationId],
     queryFn: async () => {
-      // Adjusted to include the /api/ prefix based on your backend structure
       const { data } = await api.get(`/api/stations/${stationId}`);
       return data;
     },
-    enabled: !!stationId, // Only run if we actually have an ID
+    enabled: !!stationId, 
   });
 };
 
@@ -50,8 +48,48 @@ export const useMyTransactions = () => {
   });
 };
 
+export const useMyProfile = () => {
+  return useQuery({
+    queryKey: ['profile'],
+    queryFn: async () => {
+      const { data } = await api.get('/api/users/me');
+      return data;
+    }
+  });
+};
+
 // ==========================================
-// 4.2: REAL-TIME SOCKET CONNECTION
+// MUTATIONS (4.7 & 4.8 Fixes)
+// ==========================================
+
+export const useCreateBooking = () => {
+  return useMutation({
+    mutationFn: async (stationId: number) => {
+      const { data } = await api.post(`/api/bookings?station_id=${stationId}`);
+      return data;
+    },
+    onError: (error: any) => {
+      // 🚨 Catches 400 Race Condition Error
+      alert(error.response?.data?.detail || "Failed to book station. Someone might have just taken the last slot!");
+    }
+  });
+};
+
+export const useProcessPayment = () => {
+  return useMutation({
+    mutationFn: async (bookingId: number) => {
+      const { data } = await api.post(`/api/payments?booking_id=${bookingId}`);
+      return data;
+    },
+    onError: (error: any) => {
+      // 💸 Catches 402 Payment Failure Error
+      alert(error.response?.data?.detail || "Payment failed. Please retry.");
+    }
+  });
+};
+
+// ==========================================
+// REAL-TIME SOCKET CONNECTION (Hardened)
 // ==========================================
 
 export const useNetworkSocket = () => {
@@ -59,20 +97,28 @@ export const useNetworkSocket = () => {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    // 1. Connect to FastAPI Socket.IO
     socketRef.current = io(api.defaults.baseURL as string, {
-      transports: ['websocket'],
+      // 🔥 FIX 2: Enable polling fallback and aggressive reconnection
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: Infinity, // Keep trying until the Railway server wakes up
+      reconnectionDelay: 2000,        // Wait 2 seconds between attempts
+      reconnectionDelayMax: 10000,    // Don't wait longer than 10 seconds
+      timeout: 20000,
     });
 
-    // 2. Listen for Python emitting 'availability_update'
+    // 🔥 FIX 2: Listen for drops and force manual reconnect if server-initiated
+    socketRef.current.on('disconnect', (reason) => {
+      console.warn(`[Grid Telemetry] Socket disconnected: ${reason}`);
+      if (reason === 'io server disconnect' && socketRef.current) {
+        socketRef.current.connect();
+      }
+    });
+
     socketRef.current.on('availability_update', (updates: any) => {
-      console.log('⚡ Live node update received:', updates);
-      
-      // 3. MAGIC: Optimistically update the Map Data Cache!
       queryClient.setQueryData(['stations'], (oldData: any[]) => {
         if (!oldData) return oldData;
         
-        // 🐛 FIX 2: Handle the array payload your Python backend sends [{id: 1, slots: 4}]
         if (Array.isArray(updates)) {
            return oldData.map((station) => {
              const update = updates.find((u: any) => u.id === station.id);
@@ -80,7 +126,6 @@ export const useNetworkSocket = () => {
            });
         }
         
-        // Fallback if backend sends a single object
         return oldData.map((station) => 
           station.id === updates.station_id 
             ? { ...station, available_slots: updates.available_slots }

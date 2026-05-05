@@ -3,261 +3,362 @@
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
+import { Zap, Map as MapIcon, Calendar, Wallet, Clock, User, LogOut, Activity, ShieldCheck } from 'lucide-react';
+
 import BookingOverlay from './components/BookingOverlay';
 import PaymentOverlay from './components/PaymentOverlay';
+import LandingPage from './components/LandingPage';
+import TopUpModal from './components/TopUpModal';
+import WithdrawModal from './components/WithdrawModal'; // 🔥 WITHDRAW MODAL IMPORTED HERE
 
-// 🔥 IMPORT THE GLOBAL SOCKET HOOK
-import { useNetworkSocket } from './hooks/useNetwork';
+// 🔥 IMPORT THE GLOBAL DATA HOOKS
+import { useNetworkSocket, useMyBookings, useMyTransactions, useMyProfile } from './hooks/useNetwork';
 
 // Dynamically import the Map (SSR disabled to prevent window errors)
 const MapView = dynamic(() => import('./components/MapView'), { ssr: false });
 
-// 🎨 Helper Component for the elegant floating background illustrations
-const FloatingIllustration = ({ children, top, left, delay, duration, yRange, rotateRange }: any) => (
-  <motion.div
-    className="absolute drop-shadow-[0_20px_40px_rgba(18,28,45,0.08)]"
-    style={{ top, left }}
-    animate={{ 
-      y: yRange, 
-      rotate: rotateRange 
-    }}
-    transition={{ 
-      duration, 
-      repeat: Infinity, 
-      ease: "easeInOut",
-      delay 
-    }}
-  >
-    {children}
-  </motion.div>
-);
-
 export default function App() {
   // 🔥 ACTIVATE THE LIVE SOCKET CONNECTION
   useNetworkSocket();
+  
+  // 🔥 FETCH LIVE DATA FOR ALL MODULES
+  const { data: bookings, isLoading: bookingsLoading, error: bookingsError } = useMyBookings();
+  const { data: transactions, isLoading: txLoading } = useMyTransactions();
+  const { data: profile, isLoading: profileLoading } = useMyProfile();
 
+  const [showLanding, setShowLanding] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [activeTab, setActiveTab] = useState('Map');
   const [selectedStation, setSelectedStation] = useState<any>(null);
   const [paymentStation, setPaymentStation] = useState<any>(null);
+  
+  // 🔥 STATE FOR WALLET TOP UP, WITHDRAW & BALANCE
+  const [showTopUp, setShowTopUp] = useState(false);
+  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [balance, setBalance] = useState(2450.00);
 
-  // --- 1. BRIGHT MOBILE-STYLE LOGIN PAGE (No Globe) ---
+  // --- 0. PUBLIC LANDING PAGE ---
+  if (showLanding) {
+    return <LandingPage onEnterApp={() => setShowLanding(false)} />;
+  }
+
+  // --- 1. SLEEK LOGIN PAGE ---
   if (!isLoggedIn) {
     return (
-      <main className="relative w-screen h-screen bg-white overflow-hidden flex flex-col font-sans" style={{ fontFamily: 'Geist Sans, sans-serif' }}>
+      <main className="relative w-screen h-screen bg-[#0F172A] overflow-hidden flex flex-col items-center justify-center font-sans selection:bg-blue-500 selection:text-white">
         
-        {/* The Deep Blue Curved Header */}
-        <div className="bg-[#121c2d] w-full rounded-b-[50px] pt-20 pb-12 px-8 shadow-xl z-10 relative flex flex-col items-center text-center">
-           <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-inner mb-4">
-              <span className="text-[#121c2d] text-lg font-black">GR</span>
+        {/* Abstract Background Elements */}
+        <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-20"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-emerald-500 rounded-full mix-blend-multiply filter blur-[128px] opacity-20"></div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl p-10 max-w-md w-full z-10 relative border border-white/50"
+        >
+          <div className="flex flex-col items-center mb-10">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-emerald-400 flex items-center justify-center shadow-lg mb-6">
+              <Zap size={32} className="text-white" fill="currentColor" />
             </div>
-          <h1 className="text-gray-400 text-xs font-bold tracking-widest uppercase mb-1">Welcome Back!</h1>
-          <h2 className="text-3xl font-bold text-white tracking-tight">Sign In</h2>
-        </div>
+            <h2 className="text-3xl font-bold text-slate-900 tracking-tight">System Login</h2>
+            <p className="text-slate-500 font-medium mt-2">Access the GreenRide Operator Portal</p>
+          </div>
 
-        {/* Floating Login Illustration & Form */}
-        <div className="flex-1 flex flex-col items-center justify-center px-8 relative bg-white">
-          
-          {/* Animated Illustration for Login */}
-          <motion.div
-            animate={{ y: [0, -10, 0] }}
-            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-            className="mb-8 mt-4"
-          >
-             {/* Flat Vector Car/Tech SVG */}
-             <svg width="180" height="120" viewBox="0 0 180 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-xl">
-                <rect x="20" y="40" width="140" height="60" rx="16" fill="#f4f6f9" stroke="#121c2d" strokeWidth="4"/>
-                <circle cx="50" cy="100" r="16" fill="#121c2d"/>
-                <circle cx="130" cy="100" r="16" fill="#121c2d"/>
-                <rect x="40" y="20" width="100" height="40" rx="12" fill="#e2e8f0" stroke="#121c2d" strokeWidth="4"/>
-                <rect x="130" y="60" width="16" height="8" rx="4" fill="#ff6b6b"/>
-                <rect x="34" y="60" width="16" height="8" rx="4" fill="#facc15"/>
-             </svg>
-          </motion.div>
-
-          {/* The Clean Input Form */}
-          <form className="w-full max-w-sm space-y-5" onSubmit={(e) => { 
+          <form className="space-y-6" onSubmit={(e) => { 
             e.preventDefault(); 
             setIsLoggedIn(true); 
           }}>
             <div>
-              <label className="block text-[11px] font-bold text-[#121c2d] uppercase tracking-wider mb-2 ml-4">Email Address</label>
-              <input type="email" placeholder="Enter Email Address" className="w-full bg-[#f4f6f9] text-gray-800 rounded-full px-6 py-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#121c2d] transition-all border border-transparent focus:border-[#121c2d]" required />
+              <label className="block text-sm font-bold text-slate-700 mb-2">Operator Email</label>
+              <input 
+                type="email" 
+                placeholder="admin@greenride.com" 
+                className="w-full bg-white/50 text-slate-900 px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-medium" 
+                required 
+              />
             </div>
             <div>
-              <label className="block text-[11px] font-bold text-[#121c2d] uppercase tracking-wider mb-2 ml-4">Password</label>
-              <input type="password" placeholder="Enter Your Password" className="w-full bg-[#f4f6f9] text-gray-800 rounded-full px-6 py-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#121c2d] transition-all border border-transparent focus:border-[#121c2d]" required />
-              <div className="text-right mt-3 mr-4">
-                <span className="text-xs font-bold text-gray-400 hover:text-[#121c2d] cursor-pointer transition-colors">Forget Password?</span>
-              </div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Access Key</label>
+              <input 
+                type="password" 
+                placeholder="••••••••" 
+                className="w-full bg-white/50 text-slate-900 px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-medium" 
+                required 
+              />
             </div>
 
-            <button type="submit" className="w-full bg-[#121c2d] text-white py-4 rounded-full font-bold text-sm mt-2 hover:bg-[#1a2840] transition-colors shadow-[0_10px_20px_rgba(18,28,45,0.2)] active:scale-[0.98]">
-              Sign In
+            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-bold text-base transition-colors shadow-lg shadow-blue-500/30 mt-4 flex items-center justify-center gap-2">
+              <ShieldCheck size={20} /> Initialize Session
             </button>
-
-            {/* Social Logins */}
-            <div className="flex items-center justify-center gap-4 pt-4">
-              <button type="button" className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-200 py-3 rounded-full text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
-                <span className="text-lg">G</span> Google
-              </button>
-              <button type="button" className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-200 py-3 rounded-full text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
-                <span className="text-lg text-blue-600">f</span> Facebook
-              </button>
-            </div>
           </form>
-        </div>
+        </motion.div>
       </main>
     );
   }
 
-  // --- 2. MAIN APP DASHBOARD (Animated Illustration Background) ---
+  // --- 2. PREMIUM MAIN APP DASHBOARD ---
+  const tabs = [
+    { name: 'Map', icon: MapIcon },
+    { name: 'Bookings', icon: Calendar },
+    { name: 'Wallet', icon: Wallet },
+    { name: 'History', icon: Clock },
+    { name: 'Profile', icon: User },
+  ];
+
   return (
-    <main className="min-h-screen bg-[#f4f5f8] text-black selection:bg-blue-100 relative pb-32" style={{ fontFamily: 'Geist Sans, sans-serif' }}>
+    <main className="min-h-screen bg-[#F8FAFC] font-sans selection:bg-blue-500 selection:text-white relative pb-32 overflow-hidden">
       
-      {/* 🧭 APP NAVBAR */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#3a3c47] text-white py-3 px-6 shadow-xl border-b border-white/5">
-        <div className="max-w-[1600px] mx-auto flex justify-between items-center text-[13px]">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-tr from-[#4d6af2] to-[#ff6b6b] rounded-full flex items-center justify-center shadow-inner">
-              <span className="text-white text-[10px] font-bold">GR</span>
+      {/* ✨ PREMIUM BACKGROUND ILLUSTRATIONS & GLOWS */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800A_1px,transparent_1px),linear-gradient(to_bottom,#8080800A_1px,transparent_1px)] bg-[size:40px_40px]"></div>
+        <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] bg-blue-400 rounded-full mix-blend-multiply filter blur-[150px] opacity-30 animate-pulse" style={{ animationDuration: '8s' }}></div>
+        <div className="absolute top-[20%] right-[-10%] w-[500px] h-[500px] bg-emerald-400 rounded-full mix-blend-multiply filter blur-[150px] opacity-20"></div>
+        <div className="absolute bottom-[-10%] left-[20%] w-[700px] h-[700px] bg-purple-400 rounded-full mix-blend-multiply filter blur-[150px] opacity-20 animate-pulse" style={{ animationDuration: '12s' }}></div>
+      </div>
+
+      {/* 🧭 PREMIUM DARK NAVBAR */}
+      <nav className="bg-[#0F172A] w-full px-6 py-4 sticky top-0 z-50 shadow-md">
+        <div className="max-w-[1400px] mx-auto flex items-center justify-between">
+          
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('Map')}>
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-500 to-emerald-400 flex items-center justify-center shadow-inner">
+              <Zap size={18} className="text-white" fill="currentColor" />
             </div>
-            <span className="font-bold text-sm tracking-wide hidden sm:block">GREEN RIDE</span>
+            <span className="text-white font-bold text-xl tracking-tight hidden sm:block">GreenRide Portal</span>
           </div>
 
-          <div className="flex items-center gap-2 md:gap-8 font-medium text-[#b3b4bc] bg-[#2a2c35] px-6 py-2 rounded-full border border-white/5">
-            {['Map', 'Bookings', 'Wallet', 'History', 'Profile'].map((tab) => (
-              <span 
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`cursor-pointer transition-colors px-2 py-1 ${activeTab === tab ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'hover:text-white'}`}
-              >
-                {tab}
-              </span>
-            ))}
+          <div className="hidden md:flex items-center gap-2 bg-[#1E293B] p-1 rounded-full border border-slate-700">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.name;
+              return (
+                <button
+                  key={tab.name}
+                  onClick={() => setActiveTab(tab.name)}
+                  className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                    isActive 
+                      ? 'bg-blue-600 text-white shadow-md' 
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <Icon size={16} />
+                  {tab.name}
+                </button>
+              );
+            })}
           </div>
 
           <div className="flex items-center gap-4">
-            <button onClick={() => setIsLoggedIn(false)} className="bg-[#4c333a] text-[#ff7a92] hover:bg-[#603540] px-5 py-2 rounded-xl text-xs font-bold transition-colors">
-                Logout
+            <div className="hidden sm:flex items-center gap-3 px-4 py-2 bg-slate-800 rounded-full border border-slate-700">
+               <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+               <span className="text-sm text-slate-300 font-medium">System Online</span>
+            </div>
+            <button 
+              onClick={() => setIsLoggedIn(false)} 
+              className="flex items-center gap-2 bg-slate-800 hover:bg-red-500/20 text-slate-300 hover:text-red-400 px-4 py-2.5 rounded-full text-sm font-semibold transition-all border border-slate-700 hover:border-red-500/50"
+            >
+              <LogOut size={16} /> <span className="hidden sm:inline">Terminate</span>
             </button>
           </div>
+        </div>
+
+        <div className="flex md:hidden items-center justify-between mt-4 overflow-x-auto pb-2 gap-2">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.name;
+            return (
+              <button
+                key={tab.name}
+                onClick={() => setActiveTab(tab.name)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                  isActive ? 'bg-blue-600 text-white' : 'text-slate-400 bg-slate-800'
+                }`}
+              >
+                <Icon size={16} /> {tab.name}
+              </button>
+            );
+          })}
         </div>
       </nav>
 
-      {/* Show Content based on Active Tab */}
-      {activeTab === 'Map' && (
-        <div className="animate-in fade-in duration-500">
-          
-          {/* 🌟 HERO SECTION WITH ANIMATED ILLUSTRATIONS */}
-          <section className="relative w-full h-[70vh] bg-white flex items-center justify-center overflow-hidden border-b border-gray-200">
-            
-            {/* Center Text */}
-            <div className="relative z-10 text-center max-w-2xl px-6">
-              <motion.h1 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-5xl md:text-[64px] font-bold tracking-tighter text-[#121c2d] mb-6 leading-[1.1]"
-              >
-                Own your energy
-              </motion.h1>
-              <motion.p 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="text-xl md:text-2xl text-gray-500 font-medium tracking-tight"
-              >
-                No grid can freeze, lock out, or stop you from accessing your battery nodes.
-              </motion.p>
-            </div>
+      {/* --- CONTENT AREA --- */}
+      <div className="max-w-[1400px] mx-auto pt-10 px-4 sm:px-6 relative z-10">
 
-            {/* Background Animated Illustrations (UnDraw Style) */}
-            <div className="absolute inset-0 pointer-events-none z-0">
-              
-              {/* Illustration 1: Phone Dashboard (Top Left) */}
-              <FloatingIllustration top="15%" left="15%" delay={0} duration={18} yRange={[0, -30, 0]} rotateRange={[0, 8, -4, 0]}>
-                 <svg width="120" height="180" viewBox="0 0 120 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="4" y="4" width="112" height="172" rx="20" fill="white" stroke="#121c2d" strokeWidth="6"/>
-                    <rect x="20" y="24" width="80" height="60" rx="8" fill="#e2e8f0"/>
-                    <rect x="20" y="96" width="80" height="12" rx="6" fill="#121c2d"/>
-                    <rect x="20" y="120" width="50" height="12" rx="6" fill="#cbd5e1"/>
-                    <circle cx="60" cy="155" r="8" fill="#121c2d"/>
-                 </svg>
-              </FloatingIllustration>
-
-              {/* Illustration 2: ID/Wallet Card (Bottom Right) */}
-              <FloatingIllustration top="60%" left="75%" delay={2} duration={22} yRange={[0, 40, 0]} rotateRange={[0, -10, 5, 0]}>
-                 <svg width="160" height="100" viewBox="0 0 160 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="4" y="4" width="152" height="92" rx="16" fill="#121c2d" stroke="white" strokeWidth="4"/>
-                    <circle cx="36" cy="36" r="16" fill="#4d6af2"/>
-                    <rect x="68" y="24" width="60" height="8" rx="4" fill="white"/>
-                    <rect x="68" y="40" width="40" height="8" rx="4" fill="#94a3b8"/>
-                    <rect x="20" y="72" width="120" height="8" rx="4" fill="#334155"/>
-                 </svg>
-              </FloatingIllustration>
-
-              {/* Illustration 3: Location Pin/Node (Top Right) */}
-              <FloatingIllustration top="20%" left="70%" delay={1} duration={15} yRange={[0, -25, 0]} rotateRange={[0, 5, -5, 0]}>
-                 <svg width="80" height="100" viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M40 4C20.1177 4 4 20.1177 4 40C4 70 40 96 40 96C40 96 76 70 76 40C76 20.1177 59.8823 4 40 4Z" fill="white" stroke="#121c2d" strokeWidth="6"/>
-                    <circle cx="40" cy="40" r="12" fill="#4d6af2"/>
-                 </svg>
-              </FloatingIllustration>
-
-              {/* Illustration 4: Web Dashboard (Bottom Left) */}
-              <FloatingIllustration top="65%" left="10%" delay={3} duration={20} yRange={[0, 35, 0]} rotateRange={[0, -5, 8, 0]}>
-                 <svg width="200" height="140" viewBox="0 0 200 140" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="4" y="4" width="192" height="132" rx="12" fill="white" stroke="#121c2d" strokeWidth="6"/>
-                    <rect x="4" y="4" width="192" height="28" rx="12" fill="#121c2d"/>
-                    <circle cx="20" cy="18" r="4" fill="#ff6b6b"/>
-                    <circle cx="36" cy="18" r="4" fill="#facc15"/>
-                    <circle cx="52" cy="18" r="4" fill="#4ade80"/>
-                    <rect x="20" y="50" width="60" height="70" rx="8" fill="#e2e8f0"/>
-                    <rect x="96" y="50" width="84" height="20" rx="6" fill="#cbd5e1"/>
-                    <rect x="96" y="82" width="84" height="38" rx="6" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="2"/>
-                 </svg>
-              </FloatingIllustration>
-            </div>
-          </section>
-
-          {/* Interactive Map Section */}
-          <section className="max-w-[1400px] mx-auto pt-16 pb-20 px-4 sm:px-8 relative z-10">
-            <div className="flex justify-between items-end mb-8 px-2">
+        {/* --- MAP TAB --- */}
+        {activeTab === 'Map' && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+            <div className="flex justify-between items-end mb-4">
               <div>
-                <h2 className="text-4xl font-bold tracking-tighter leading-none mb-2 text-[#121c2d]">Active Network</h2>
-                <p className="text-gray-500 font-medium">Live synchronization • Updating every 60s</p>
-              </div>
-              <div className="hidden md:flex gap-3">
-                <button className="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-bold shadow-sm hover:bg-gray-50">Filter: 5km</button>
-                <button className="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-bold shadow-sm hover:bg-gray-50">Rating: 4★+</button>
+                <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Grid Telemetry</h2>
+                <p className="text-slate-600 font-medium mt-1 flex items-center gap-2">
+                  <Activity size={16} className="text-emerald-500" /> Live synchronization • Polling interval: 60s
+                </p>
               </div>
             </div>
-            
-            <div className="rounded-[32px] overflow-hidden shadow-[0_20px_50px_rgba(18,28,45,0.1)] border border-gray-200 bg-[#161921]">
+            <div className="overflow-hidden rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-white bg-white/80 backdrop-blur-xl h-[650px] relative">
               <MapView onSelectStation={(station: any) => setSelectedStation(station)} />
             </div>
-          </section>
-        </div>
-      )}
+          </motion.div>
+        )}
 
-      {/* Placeholder for other Nav Tabs */}
-      {activeTab !== 'Map' && (
-        <section className="pt-40 flex items-center justify-center min-h-[80vh]">
-          <div className="text-center p-12 bg-white rounded-[40px] shadow-xl border border-gray-100 max-w-md w-full mx-4">
-            <div className="text-6xl mb-6">
-              {activeTab === 'Bookings' && '📅'}
-              {activeTab === 'Wallet' && '💳'}
-              {activeTab === 'History' && '🧾'}
-              {activeTab === 'Profile' && '👤'}
+        {/* --- BOOKINGS TAB --- */}
+        {activeTab === 'Bookings' && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto">
+            <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white p-8 md:p-10">
+              <h2 className="text-3xl font-bold text-slate-900 mb-8 pb-6 border-b border-slate-200">Active Reservations</h2>
+              
+              {bookingsLoading ? (
+                <div className="text-center py-20 text-blue-600 font-medium animate-pulse flex flex-col items-center gap-4">
+                  <Activity size={32} /> Fetching Node Allocations...
+                </div>
+              ) : !bookings || bookings.length === 0 ? (
+                <div className="text-center py-24 bg-white/50 rounded-2xl border border-dashed border-slate-300">
+                  <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm text-slate-400">
+                    <Calendar size={24} />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900 mb-2">No active allocations</h3>
+                  <p className="text-slate-500 font-medium">Your matrix is currently empty.</p>
+                </div>
+              ) : (
+                <div className="grid gap-4">
+                  {bookings.map((booking: any) => (
+                    <div key={booking.id} className="p-6 bg-white/60 rounded-2xl border border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-white hover:shadow-md transition-all group">
+                      <div className="mb-4 sm:mb-0">
+                        <span className="inline-block px-3 py-1 bg-blue-100/80 text-blue-700 text-xs font-bold rounded-full mb-3 uppercase tracking-wider">
+                          Node: {booking.station_id}
+                        </span>
+                        <h3 className="text-2xl font-bold text-slate-900 capitalize">{booking.status}</h3>
+                      </div>
+                      <div className="text-left sm:text-right">
+                        <p className="text-sm text-slate-500 font-medium mb-1">Time to Live</p>
+                        <p className="text-lg font-bold text-red-600 bg-red-50/80 px-4 py-1.5 rounded-lg border border-red-100 group-hover:bg-red-100 transition-colors">
+                          {new Date(booking.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <h2 className="text-3xl font-bold tracking-tighter mb-4 text-[#121c2d]">{activeTab} Module</h2>
-            <p className="text-gray-500 font-medium mb-8">This module will be connected to the Phase 4 live data stream.</p>
-            <button onClick={() => setActiveTab('Map')} className="w-full bg-[#121c2d] text-white py-4 rounded-full font-bold uppercase tracking-widest text-[10px] hover:bg-[#1a2840] transition-all">
-              Return to Map
-            </button>
-          </div>
-        </section>
-      )}
+          </motion.div>
+        )}
+
+        {/* --- WALLET TAB --- */}
+        {activeTab === 'Wallet' && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl mx-auto">
+            <div className="bg-gradient-to-br from-[#0F172A]/90 to-[#1E293B]/90 backdrop-blur-xl rounded-[2rem] p-10 md:p-14 text-white shadow-[0_20px_50px_rgb(0,0,0,0.15)] border border-slate-700 relative overflow-hidden">
+              
+              <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500 rounded-full mix-blend-overlay filter blur-[80px] opacity-40"></div>
+              
+              <div className="relative z-10">
+                <div className="flex items-center gap-2 text-slate-300 font-medium mb-4">
+                  <Wallet size={20} /> Ecosystem Balance
+                </div>
+                
+                <div className="text-6xl md:text-7xl font-bold mb-12 text-white tracking-tight drop-shadow-lg">
+                  <span className="text-emerald-400">₹</span> {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <button 
+                    onClick={() => setShowTopUp(true)}
+                    className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-bold transition-colors shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2"
+                  >
+                    Inject Capital
+                  </button>
+                  <button 
+                    onClick={() => setShowWithdraw(true)}
+                    className="bg-white/10 hover:bg-white/20 text-white px-8 py-4 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 backdrop-blur-md"
+                  >
+                    Withdraw Funds
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* --- HISTORY TAB --- */}
+        {activeTab === 'History' && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto">
+            <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white overflow-hidden">
+              <div className="bg-slate-50/50 backdrop-blur-md border-b border-slate-200/50 p-8 flex items-center gap-3">
+                  <Clock className="text-slate-600" size={24} />
+                  <h2 className="text-2xl font-bold text-slate-900">Financial Ledger</h2>
+              </div>
+              
+              {txLoading ? (
+                 <div className="p-20 text-center text-blue-600 font-medium animate-pulse">Compiling Records...</div>
+              ) : !transactions || transactions.length === 0 ? (
+                  <div className="p-24 text-center text-slate-500 font-medium">No transaction records found.</div>
+              ) : (
+                <div className="flex flex-col divide-y divide-slate-100/50">
+                  {transactions.map((tx: any) => (
+                     <div key={tx.id} className="flex flex-col sm:flex-row justify-between p-6 md:p-8 hover:bg-white/60 transition-colors items-start sm:items-center gap-4">
+                        <div>
+                          <p className="font-bold text-lg text-slate-900">TXN_{tx.id}</p>
+                          <p className="text-sm font-medium text-slate-500 mt-1">Ref: {tx.upi_ref || 'N/A'}</p>
+                        </div>
+                        <div className="text-left sm:text-right">
+                          <p className="font-bold text-2xl text-slate-900">₹{tx.amount}</p>
+                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold mt-2 capitalize shadow-sm ${
+                            tx.status === 'success' ? 'bg-emerald-100/80 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                          }`}>
+                              {tx.status}
+                          </span>
+                        </div>
+                     </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* --- PROFILE TAB --- */}
+        {activeTab === 'Profile' && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto">
+            <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white p-8 md:p-12">
+              <h2 className="text-2xl font-bold text-slate-900 mb-8 pb-6 border-b border-slate-200/50 flex items-center gap-3">
+                <User size={24} className="text-blue-600" /> Operator Clearance
+              </h2>
+              
+              {profileLoading ? (
+                <div className="py-12 text-center text-blue-600 font-medium animate-pulse">Decrypting Identity...</div>
+              ) : (
+                <div className="space-y-10">
+                  <div className="flex items-center gap-6">
+                      <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 text-white flex items-center justify-center font-bold text-4xl shadow-lg ring-4 ring-white">
+                          {profile?.email?.charAt(0).toUpperCase() || 'U'}
+                      </div>
+                      <div>
+                          <div className="text-sm font-medium text-slate-500 mb-1">System Status</div>
+                          <div className="inline-flex items-center gap-2 bg-emerald-50/80 backdrop-blur-sm text-emerald-600 px-3 py-1 rounded-full text-sm font-bold shadow-sm">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Active
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="space-y-6 bg-white/50 p-6 rounded-2xl border border-white shadow-sm">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-500 mb-2">Assigned Email</label>
+                      <div className="text-lg font-bold text-slate-900">{profile?.email}</div>
+                    </div>
+                    <div className="pt-4 border-t border-slate-200/50">
+                      <label className="block text-sm font-bold text-slate-500 mb-2">Security Classification</label>
+                      <div className="inline-block bg-blue-100/80 text-blue-700 px-4 py-1.5 rounded-lg font-bold text-sm shadow-sm">
+                          {profile?.role || 'Guest Mode'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+      </div>
 
       {/* --- OVERLAYS --- */}
       {selectedStation && (
@@ -275,6 +376,28 @@ export default function App() {
         <PaymentOverlay 
           station={paymentStation}
           onClose={() => setPaymentStation(null)}
+        />
+      )}
+
+      {showTopUp && (
+        <TopUpModal 
+          onClose={() => setShowTopUp(false)}
+          onSuccess={(amount) => {
+            setBalance(prev => prev + amount);
+            setShowTopUp(false);
+          }}
+        />
+      )}
+
+      {/* 🔥 THE NEW WITHDRAW MODAL ATTACHED HERE */}
+      {showWithdraw && (
+        <WithdrawModal 
+          currentBalance={balance}
+          onClose={() => setShowWithdraw(false)}
+          onSuccess={(amount) => {
+            setBalance(prev => prev - amount); // Subtracts money!
+            setShowWithdraw(false);
+          }}
         />
       )}
     </main>

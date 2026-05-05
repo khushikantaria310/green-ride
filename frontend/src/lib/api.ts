@@ -26,8 +26,13 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     
-    // Handle 401 Unauthorized (Refresh token flow)
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // 🔥 FIX 1: Handle 401 Unauthorized (Refresh token flow)
+    // We added the URL check here to ensure we don't loop if the refresh endpoint itself 401s!
+    if (
+      error.response?.status === 401 && 
+      !originalRequest._retry && 
+      !originalRequest.url?.includes('/auth/refresh')
+    ) {
       originalRequest._retry = true;
       try {
         const refreshToken = localStorage.getItem('refreshToken');
@@ -41,7 +46,7 @@ api.interceptors.response.use(
         // Refresh failed, boot them out
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
-        window.location.reload();
+        window.location.reload(); // Force app to re-evaluate login state
         return Promise.reject(refreshError);
       }
     }
