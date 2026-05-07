@@ -1,15 +1,47 @@
 # Secrets and Environment Variables
 .env
+.env.local
 
-# Python Virtual Environment
+# Dependency Managers
+node_modules/
+bun.lockb
+
+# Prisma 7 - Generated Client
+# We ignore this because it is generated fresh on every machine
+prisma/generated/
+
+# TypeScript / Build Outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Neovim / Vim (Crucial for your NVim setup)
+*.swp
+*.swo
+undo/
+.netrwhist
+
+# Linux / System files
+.DS_Store
+.directory
+Thumbs.db
+
+# Python Legacy (Keeping these for your existing backend files)
 venv/
-
-# Python Cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.pytest_cache/
 
-# SQLite Database Files
+# SQLite Database Files (Legacy)
 *.db
 *.sqlite3
+*.db-journal
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
