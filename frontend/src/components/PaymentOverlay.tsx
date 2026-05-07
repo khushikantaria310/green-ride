@@ -12,25 +12,53 @@ export default function PaymentOverlay({ station, onClose }: PaymentOverlayProps
   const [step, setStep] = useState<'payment' | 'processing' | 'success'>('payment');
   const [timeLeft, setTimeLeft] = useState(600); // 10 minutes (600s)
   const [upiId, setUpiId] = useState("");
+  const [bookingId, setBookingId] = useState("BATT-49X"); // Default fallback
 
   // Countdown Timer Logic
   useEffect(() => {
     if (timeLeft <= 0) {
-      onClose(); // Auto-cancel if time runs out
+      onClose();
       return;
     }
     const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
     return () => clearInterval(timer);
   }, [timeLeft, onClose]);
 
-  const handlePayment = (e: React.FormEvent) => {
+  // 🔥 THE REAL WRITE PIPELINE (With Smart Error Handling)
+  const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setStep('processing');
     
-    // Simulate network delay & success
-    setTimeout(() => {
+    try {
+      // 1. Send the POST request to your Express API
+      const response = await fetch("http://localhost:5000/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stationId: station.id }) // Send the real station UUID
+      });
+
+      // 2. 🔥 Look at what the backend actually said instead of crashing
+      if (!response.ok) {
+        const errorData = await response.json();
+        alert(`Backend Error: ${errorData.error || "Unknown error occurred"}`);
+        setStep('payment'); // Send them back to the form gracefully
+        return; // Stop execution here
+      }
+
+      // 3. Grab the real booking data from PostgreSQL
+      const data = await response.json();
+      
+      // 4. Make the UI look cool by using the first 6 characters of the real DB UUID
+      setBookingId(`BATT-${data.id.substring(0, 6).toUpperCase()}`);
+      
+      // 5. Trigger the Success Screen
       setStep('success');
-    }, 2500);
+
+    } catch (error: any) {
+      console.error("Booking failed:", error);
+      alert("System Error: Failed to reach the server. Is your backend running?");
+      setStep('payment'); // Let them try again
+    }
   };
 
   // SVG Ring Math
@@ -43,7 +71,6 @@ export default function PaymentOverlay({ station, onClose }: PaymentOverlayProps
 
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-[#0a0b10]/90 backdrop-blur-xl" onClick={step === 'success' ? onClose : undefined} />
 
       <AnimatePresence mode="wait">
@@ -58,7 +85,6 @@ export default function PaymentOverlay({ station, onClose }: PaymentOverlayProps
             <div className="flex justify-between items-center mb-8">
               <h2 className="text-2xl font-bold text-white">Secure Battery</h2>
               
-              {/* Animated SVG Countdown Ring */}
               <div className="relative w-16 h-16 flex items-center justify-center">
                 <svg className="absolute inset-0 w-full h-full transform -rotate-90">
                   <circle cx="32" cy="32" r={radius - 12} stroke="rgba(255,255,255,0.1)" strokeWidth="3" fill="transparent" />
@@ -78,14 +104,13 @@ export default function PaymentOverlay({ station, onClose }: PaymentOverlayProps
 
             <div className="bg-white/5 rounded-2xl p-4 mb-6 border border-white/5">
               <p className="text-gray-400 text-sm mb-1">Target Node</p>
-              <p className="text-white font-medium">{station.name}</p>
+              <p className="text-white font-medium truncate">{station.name}</p>
               <div className="flex justify-between mt-4 pt-4 border-t border-white/10">
                 <p className="text-gray-400">Total Swap Fee</p>
                 <p className="text-xl text-white font-bold">₹149.00</p>
               </div>
             </div>
 
-            {/* UPI Input Form */}
             <form onSubmit={handlePayment}>
               <label className="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-2 ml-2">UPI ID</label>
               <input 
@@ -117,7 +142,7 @@ export default function PaymentOverlay({ station, onClose }: PaymentOverlayProps
           >
             <div className="w-20 h-20 border-4 border-white/10 border-t-[#4d6af2] rounded-full animate-spin mb-6" />
             <h2 className="text-2xl font-bold text-white mb-2">Verifying Signature</h2>
-            <p className="text-gray-400">Committing transaction to network...</p>
+            <p className="text-gray-400">Committing transaction to database...</p>
           </motion.div>
         )}
 
@@ -128,12 +153,11 @@ export default function PaymentOverlay({ station, onClose }: PaymentOverlayProps
             animate={{ opacity: 1, scale: 1 }}
             className="relative w-full max-w-sm bg-gradient-to-b from-[#161921] to-[#0a0b10] rounded-[40px] border border-green-500/30 p-8 shadow-[0_0_50px_rgba(34,197,94,0.15)] text-center overflow-hidden z-10"
           >
-            {/* CORRECTED: Battery ID Reveal Card (Spring Physics Fix) */}
             <motion.div 
               initial={{ scale: 0, rotate: -30 }}
               animate={{ scale: 1, rotate: 0 }}
               transition={{ type: "spring", stiffness: 200, damping: 10 }}
-              className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_30px_rgba(34,197,94,0.4)] text-3xl"
+              className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_30px_rgba(34,197,94,0.4)] text-3xl text-white font-bold"
             >
               ✓
             </motion.div>
@@ -144,8 +168,8 @@ export default function PaymentOverlay({ station, onClose }: PaymentOverlayProps
             <div className="bg-[#0a0b10] rounded-2xl p-6 border border-white/5 mb-8 relative group">
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
               <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Authorized Battery ID</p>
-              <p className="text-3xl font-mono font-bold text-white tracking-widest text-shadow-glow">
-                BATT-49X
+              <p className="text-3xl font-mono font-bold text-white tracking-widest drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
+                {bookingId}
               </p>
             </div>
 
