@@ -1,76 +1,88 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
+import { io } from 'socket.io-client';
 
-// 🔥 Pointing directly to our new Express server
 const API_URL = 'http://localhost:5000/api';
+const SOCKET_URL = 'http://localhost:5000';
 
-// ==========================================
-// TANSTACK QUERY HOOKS (Wired to PostgreSQL)
-// ==========================================
+// 🔥 Initialize the WebSocket Connection explicitly to avoid connection drops
+const socket = io(SOCKET_URL, {
+  transports: ['websocket', 'polling'], // Force websocket first
+  reconnectionDelay: 1000,
+});
+
+// Helper to grab the token from the browser's memory
+const fetchWithAuth = async (endpoint: string) => {
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_URL}${endpoint}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error("Unauthorized");
+  return res.json();
+};
 
 export const useStations = () => {
   return useQuery({
     queryKey: ['stations'],
     queryFn: async () => {
-      const res = await fetch(`${API_URL}/stations`);
+      const res = await fetch(`${API_URL}/stations`); // Stations are public!
       if (!res.ok) throw new Error("Failed to fetch stations");
       return res.json();
     },
-    // Auto-refreshes map data every 5 seconds
-    refetchInterval: 5000 
+    // 🔥 Removed refetchInterval! We rely on WebSockets now.
   });
 };
 
 export const useMyBookings = () => {
   return useQuery({
     queryKey: ['bookings'],
-    queryFn: async () => {
-      const res = await fetch(`${API_URL}/bookings`);
-      if (!res.ok) throw new Error("Failed to fetch bookings");
-      return res.json();
-    },
-    // Instantly updates the UI shortly after you make a payment
-    refetchInterval: 3000 
+    queryFn: () => fetchWithAuth('/bookings'),
+    retry: false
+    // 🔥 Removed refetchInterval!
   });
 };
 
-// 🔥 PHASE 3: REAL FINANCIAL LEDGER
 export const useMyTransactions = () => {
   return useQuery({
     queryKey: ['transactions'],
-    queryFn: async () => {
-      const res = await fetch(`${API_URL}/transactions`);
-      if (!res.ok) throw new Error("Failed to fetch transactions");
-      return res.json();
-    },
-    // Auto-updates the History tab when a payment goes through
-    refetchInterval: 3000 
+    queryFn: () => fetchWithAuth('/transactions'),
+    retry: false
+    // 🔥 Removed refetchInterval!
   });
 };
 
-// 🔥 PHASE 3: REAL WALLET BALANCE
 export const useMyProfile = () => {
   return useQuery({
     queryKey: ['profile'],
-    queryFn: async () => {
-      const res = await fetch(`${API_URL}/users/me`);
-      if (!res.ok) throw new Error("Failed to fetch profile");
-      return res.json();
-    },
-    // Watch your balance drop in real-time!
-    refetchInterval: 3000 
+    queryFn: () => fetchWithAuth('/users/me'),
+    retry: false
+    // 🔥 Removed refetchInterval!
   });
 };
 
-// ==========================================
-// GRACEFUL SOCKET STUB
-// ==========================================
-// We keep this hook so App.tsx doesn't break, but we disable the 
-// actual socket connection until we build out true WebSockets later in Phase 3.
+// 🔥 THE REAL SOCKET LISTENER
 export const useNetworkSocket = () => {
+  const queryClient = useQueryClient();
+
   useEffect(() => {
-    console.log("⚡ Grid Telemetry initialized (TanStack Polling active instead of WebSockets).");
-  }, []);
+    socket.on('connect', () => {
+      console.log('⚡ Connected to GreenRide Live Grid');
+    });
+
+    // When the backend shouts "grid_update", we instantly refresh all queries!
+    socket.on('grid_update', () => {
+      console.log('🔄 Grid state changed! Force refreshing UI...');
+      queryClient.invalidateQueries({ queryKey: ['stations'] });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+    });
+
+    return () => {
+      socket.off('connect');
+      socket.off('grid_update');
+    };
+  }, [queryClient]);
   
   return null; 
 };

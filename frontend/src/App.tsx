@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
-import { Zap, Map as MapIcon, Calendar, Wallet, Clock, User, LogOut, Activity, ShieldCheck } from 'lucide-react';
+import { Zap, Map as MapIcon, Calendar, Wallet, Clock, User, LogOut, Activity, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 
 import BookingOverlay from './components/BookingOverlay';
 import PaymentOverlay from './components/PaymentOverlay';
@@ -29,6 +29,12 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [activeTab, setActiveTab] = useState('Map');
   
+  // 🔥 AUTH STATES
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
   // REAL DATA STATES
   const [stations, setStations] = useState<any[]>([]);
   const [balance, setBalance] = useState(0.00); 
@@ -60,7 +66,28 @@ export default function App() {
     }
   }, [profile]);
 
-  // --- 4. NAVIGATION RENDER ---
+  // --- 4. AUTHENTICATION HANDLER ---
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const endpoint = authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
+    try {
+      const res = await fetch(`http://localhost:5000${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      
+      // Save the token to the browser and let them in!
+      localStorage.setItem('token', data.token);
+      setIsLoggedIn(true);
+    } catch (error: any) {
+      alert(`Authentication Failed: ${error.message}`);
+    }
+  };
+
+  // --- 5. NAVIGATION RENDER ---
   if (showLanding) return <LandingPage onEnterApp={() => setShowLanding(false)} />;
 
   if (!isLoggedIn) {
@@ -83,29 +110,46 @@ export default function App() {
             <p className="text-slate-500 font-medium mt-2">GreenRide Operator Access</p>
           </div>
 
-          <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); setIsLoggedIn(true); }}>
+          <form className="space-y-6" onSubmit={handleAuth}>
             <div>
               <label className="block text-sm font-bold text-slate-700 mb-2">Operator Email</label>
               <input 
                 type="email" 
-                placeholder="admin@greenride.com" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="operator@greenride.com" 
                 className="w-full bg-white/50 text-slate-900 px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-medium hover:border-blue-300" 
                 required 
               />
             </div>
             <div>
               <label className="block text-sm font-bold text-slate-700 mb-2">Access Key</label>
-              <input 
-                type="password" 
-                placeholder="••••••••" 
-                className="w-full bg-white/50 text-slate-900 px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-medium hover:border-blue-300" 
-                required 
-              />
+              <div className="relative">
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••" 
+                  className="w-full bg-white/50 text-slate-900 px-4 py-3 pr-12 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-medium hover:border-blue-300" 
+                  required 
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none"
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
             </div>
 
             <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-bold text-base transition-all duration-300 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 hover:-translate-y-0.5 mt-4 flex items-center justify-center gap-2">
-              <ShieldCheck size={20} /> Initialize Session
+              <ShieldCheck size={20} /> {authMode === 'login' ? 'Initialize Session' : 'Register New Operator'}
             </button>
+
+            <p className="text-center text-sm text-slate-500 mt-4 cursor-pointer hover:text-blue-600 font-medium transition-colors" onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}>
+              {authMode === 'login' ? "Don't have an access key? Request clearance." : "Already have clearance? Initialize session."}
+            </p>
           </form>
         </motion.div>
       </main>
@@ -151,7 +195,7 @@ export default function App() {
             })}
           </div>
 
-          <button onClick={() => setIsLoggedIn(false)} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-4 py-2.5 rounded-full text-sm font-semibold border border-slate-700 transition-all duration-300 shadow-sm hover:shadow-md">
+          <button onClick={() => { localStorage.removeItem('token'); setIsLoggedIn(false); }} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-4 py-2.5 rounded-full text-sm font-semibold border border-slate-700 transition-all duration-300 shadow-sm hover:shadow-md">
             <LogOut size={16} /> <span className="hidden sm:inline">Terminate</span>
           </button>
         </div>
@@ -245,17 +289,15 @@ export default function App() {
                   {transactions?.map((tx: any) => (
                     <div key={tx.id} className="flex justify-between items-center p-6 bg-white rounded-2xl border border-slate-100 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-500/10 cursor-default">
                       <div>
-                        {/* 🔥 FIXED HYDRATION ERROR HERE */}
+                        {/* 🔥 FULLY DARK TEXT FOR LEDGER */}
                         <div className="font-bold text-lg text-slate-900 flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-emerald-500"></span> TXN_{tx.id.slice(0, 8)}
                         </div>
-                        {/* Darker Date */}
                         <p className="text-sm font-medium text-slate-500 mt-1 ml-4">{new Date(tx.createdAt).toLocaleString()}</p>
                       </div>
                       <div className="text-right">
-                        {/* High Contrast Amount */}
+                        {/* 🔥 FULLY DARK TEXT FOR AMOUNT */}
                         <p className="font-black text-3xl text-slate-900 tracking-tight">₹{tx.amount}</p>
-                        {/* Popping Badge */}
                         <span className="inline-block mt-2 px-3 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-widest rounded-md shadow-sm">{tx.status}</span>
                       </div>
                     </div>
@@ -270,13 +312,15 @@ export default function App() {
         {activeTab === 'Profile' && (
           <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="max-w-2xl mx-auto">
             <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-12 border border-white shadow-lg hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-500 hover:-translate-y-1">
-              <h2 className="text-2xl font-bold mb-8 border-b border-slate-100 pb-6 flex items-center gap-3"><User size={24} className="text-blue-600" /> Operator Clearance</h2>
+              <h2 className="text-2xl font-bold text-slate-900 mb-8 border-b border-slate-200 pb-6 flex items-center gap-3">
+                <User size={24} className="text-blue-600" /> Operator Clearance
+              </h2>
               <div className="flex items-center gap-6 mb-10">
                 <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-600 to-emerald-500 text-white flex items-center justify-center font-bold text-4xl shadow-lg ring-4 ring-white transition-transform duration-500 hover:scale-105 hover:rotate-3">
                   {profile?.email?.charAt(0).toUpperCase() || "U"}
                 </div>
                 <div>
-                  <div className="text-sm font-bold text-emerald-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                  <div className="text-sm font-bold text-emerald-600 uppercase tracking-wider mb-1 flex items-center gap-1">
                     <span className="relative flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -287,7 +331,7 @@ export default function App() {
                 </div>
               </div>
               <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 transition-colors duration-300 hover:bg-white hover:shadow-md">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Security Classification</p>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Security Classification</p>
                 <div className="text-xl font-black text-blue-600 flex items-center gap-2">
                   <ShieldCheck size={20} /> {profile?.role || "OPERATOR"}
                 </div>
