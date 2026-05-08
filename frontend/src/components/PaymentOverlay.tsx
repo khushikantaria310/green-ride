@@ -24,20 +24,26 @@ export default function PaymentOverlay({ station, onClose }: PaymentOverlayProps
     return () => clearInterval(timer);
   }, [timeLeft, onClose]);
 
-  // 🔥 THE REAL WRITE PIPELINE (With Smart Error Handling)
+  // 🔥 THE REAL WRITE PIPELINE (With Auth Token!)
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setStep('processing');
     
     try {
-      // 1. Send the POST request to your Express API
+      // 1. Grab the token from browser storage
+      const token = localStorage.getItem('token');
+
+      // 2. Send the POST request to your Express API with the Token
       const response = await fetch("http://localhost:5000/api/bookings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}` // 🔥 SHOW THE BOUNCER YOUR ID
+        },
         body: JSON.stringify({ stationId: station.id }) // Send the real station UUID
       });
 
-      // 2. 🔥 Look at what the backend actually said instead of crashing
+      // 3. 🔥 Look at what the backend actually said instead of crashing
       if (!response.ok) {
         const errorData = await response.json();
         alert(`Backend Error: ${errorData.error || "Unknown error occurred"}`);
@@ -45,13 +51,13 @@ export default function PaymentOverlay({ station, onClose }: PaymentOverlayProps
         return; // Stop execution here
       }
 
-      // 3. Grab the real booking data from PostgreSQL
+      // 4. Grab the real booking data from PostgreSQL
       const data = await response.json();
       
-      // 4. Make the UI look cool by using the first 6 characters of the real DB UUID
+      // 5. Make the UI look cool by using the first 6 characters of the real DB UUID
       setBookingId(`BATT-${data.id.substring(0, 6).toUpperCase()}`);
       
-      // 5. Trigger the Success Screen
+      // 6. Trigger the Success Screen
       setStep('success');
 
     } catch (error: any) {

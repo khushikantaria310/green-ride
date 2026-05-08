@@ -16,6 +16,7 @@ datasource db {
 model User {
   id           String        @id @default(uuid())
   email        String        @unique
+  password     String?       // 🔥 PHASE 4: Added for real Authentication
   balance      Float         @default(0.0)
   role         String        @default("OPERATOR")
   bookings     Booking[]
@@ -40,14 +41,14 @@ model Station {
 }
 
 model Booking {
-  id         String   @id @default(uuid())
-  user       User     @relation(fields: [userId], references: [id])
-  userId     String
-  station    Station  @relation(fields: [stationId], references: [id])
-  stationId  String
-  status     String   @default("CONFIRMED")
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  station   Station  @relation(fields: [stationId], references: [id])
+  stationId String
+  status    String   @default("CONFIRMED")
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 }
 
 model Transaction {
