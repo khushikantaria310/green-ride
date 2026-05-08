@@ -254,12 +254,11 @@ app.post("/api/iot/update", async (req, res) => {
 
     const randomStation = stations[Math.floor(Math.random() * stations.length)];
     
-    // Defensive defaults to prevent crashes
+    // Simple Phase 5 logic - No Intelligence Metrics
     const currentInv = randomStation.availableBatteries ?? 0;
-    const maxInv = randomStation.totalPorts ?? 10;
 
     const change = Math.random() > 0.5 ? 1 : -1;
-    let newBatteries = Math.min(Math.max(currentInv + change, 0), maxInv);
+    let newBatteries = Math.max(currentInv + change, 0);
 
     const updated = await prisma.station.update({ 
       where: { id: randomStation.id }, 
@@ -272,7 +271,6 @@ app.post("/api/iot/update", async (req, res) => {
     res.json({ success: true, station: updated.name, batteries: newBatteries });
 
   } catch (error: any) { 
-    // Simplified logging to prevent the Prisma "lines.join" crash
     console.error("❌ GRID DATABASE ERROR:", error.message || "Unknown error"); 
     res.status(500).json({ error: "IoT Sync Failed" }); 
   }

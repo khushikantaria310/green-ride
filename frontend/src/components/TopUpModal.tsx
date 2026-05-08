@@ -28,45 +28,47 @@ export default function TopUpModal({ onClose, onSuccess }: TopUpModalProps) {
 
   const handleProceed = async () => {
     const finalAmount = customAmount ? parseInt(customAmount) : amount;
-    if (!finalAmount || finalAmount <= 0) return;
+    if (!finalAmount || finalAmount <= 0) {
+      alert("Please enter a valid amount.");
+      return;
+    }
     
     setStep('processing');
 
     try {
-      if (!(window as any).Razorpay) {
-         alert("Razorpay SDK is still loading...");
-         setStep('select');
-         return;
-      }
-
       const token = localStorage.getItem('token');
+      if (!token) throw new Error("Session expired. Please login again.");
 
+      // 1. Create the Order in Backend
       const orderResponse = await fetch('http://localhost:5000/api/payments/create-order', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ amount: finalAmount }),
       });
       
       const orderData = await orderResponse.json();
-      if (!orderResponse.ok) throw new Error(orderData.error || 'Failed to create order');
+      if (!orderResponse.ok) throw new Error(orderData.error || 'Gateway Timeout');
 
+      // 2. Configure Razorpay Options
       const options = {
-        key: "rzp_test_SmmWza8ZZrRajA", // Ensure this matches your backend Key ID
+        key: "rzp_test_SmmVO2abnNODdT", // ✅ UPDATED: Now matches your .env perfectly
         amount: orderData.amount,
         currency: orderData.currency,
         name: "GreenRide Ecosystem",
-        description: "Wallet Capital Injection",
+        description: "Energy Grid Credit Injection",
         order_id: orderData.id,
         handler: async function (response: any) {
+          setStep('processing');
           try {
+            // 3. Verify the Payment Signature
             const verifyResponse = await fetch('http://localhost:5000/api/payments/verify', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
+                'Authorization': `Bearer ${token}`,
               },
               body: JSON.stringify({
                 razorpay_order_id: response.razorpay_order_id,
@@ -78,19 +80,26 @@ export default function TopUpModal({ onClose, onSuccess }: TopUpModalProps) {
 
             if (verifyResponse.ok) {
               setStep('success');
-              setTimeout(() => onSuccess(finalAmount), 2000);
+              setTimeout(() => {
+                onSuccess(finalAmount);
+                onClose();
+              }, 2500);
             } else {
-              alert("Payment verification failed.");
-              setStep('select');
+              throw new Error("Signature verification failed.");
             }
-          } catch (err) {
-            alert("Verification Error.");
+          } catch (err: any) {
+            alert(err.message);
             setStep('select');
           }
         },
-        prefill: { name: "Operator", email: "admin@greenride.com" },
+        prefill: {
+          name: "Operator",
+          email: "admin@greenride.com",
+        },
         theme: { color: "#2563EB" },
-        modal: { ondismiss: () => setStep('select') }
+        modal: {
+          ondismiss: () => setStep('select'),
+        }
       };
 
       const rzp = new (window as any).Razorpay(options);
@@ -118,7 +127,7 @@ export default function TopUpModal({ onClose, onSuccess }: TopUpModalProps) {
       >
         <AnimatePresence mode="wait">
           {step === 'select' && (
-            <motion.div key="select" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="p-8">
+            <motion.div key="select" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="p-8">
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
@@ -131,7 +140,6 @@ export default function TopUpModal({ onClose, onSuccess }: TopUpModalProps) {
                 </button>
               </div>
 
-              {/* Amount Selection Grid */}
               <div className="grid grid-cols-2 gap-3 mb-6">
                 {presetAmounts.map((preset) => (
                   <button 
@@ -140,7 +148,7 @@ export default function TopUpModal({ onClose, onSuccess }: TopUpModalProps) {
                     className={`py-4 rounded-2xl font-bold border-2 transition-all duration-200 ${
                       amount === preset && !customAmount 
                         ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-sm' 
-                        : 'border-slate-100 bg-slate-50 text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                        : 'border-slate-100 bg-slate-50 text-slate-600 hover:border-slate-300'
                     }`}
                   >
                     ₹{preset.toLocaleString()}
@@ -148,7 +156,6 @@ export default function TopUpModal({ onClose, onSuccess }: TopUpModalProps) {
                 ))}
               </div>
 
-              {/* Custom Amount Input */}
               <div className="relative mb-8">
                 <input 
                   type="number" 
@@ -164,7 +171,7 @@ export default function TopUpModal({ onClose, onSuccess }: TopUpModalProps) {
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-2xl font-bold shadow-lg shadow-blue-200 flex items-center justify-center gap-3 active:scale-[0.98] transition-transform"
               >
                 <CreditCard size={20} /> 
-                <span className="text-lg">Pay via Razorpay</span>
+                <span className="text-lg">Initialize Gateway</span>
               </button>
             </motion.div>
           )}
@@ -172,8 +179,8 @@ export default function TopUpModal({ onClose, onSuccess }: TopUpModalProps) {
           {step === 'processing' && (
             <div className="p-12 flex flex-col items-center justify-center min-h-[420px]">
               <Loader2 size={48} className="text-blue-600 animate-spin mb-6" />
-              <h2 className="text-2xl font-bold text-slate-900">Securely Connecting...</h2>
-              <p className="text-slate-500 mt-2">Initializing gateway protocols</p>
+              <h2 className="text-2xl font-bold text-slate-900">Syncing Grid...</h2>
+              <p className="text-slate-500 mt-2">Communicating with the secure mainframe</p>
             </div>
           )}
 
@@ -182,7 +189,7 @@ export default function TopUpModal({ onClose, onSuccess }: TopUpModalProps) {
               <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mb-6">
                 <CheckCircle2 size={48} className="text-emerald-600" />
               </div>
-              <h2 className="text-3xl font-bold text-slate-900">Capital Injected!</h2>
+              <h2 className="text-3xl font-bold text-slate-900 text-center">Capital Injected!</h2>
               <p className="text-slate-500 mt-2 text-center">Your secure balance has been updated across the grid.</p>
             </div>
           )}

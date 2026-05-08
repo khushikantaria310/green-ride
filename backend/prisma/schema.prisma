@@ -1,22 +1,17 @@
 generator client {
-  provider               = "prisma-client"
-  output                 = "./generated"
-  // 🔥 Optimizing for your Bun + Cacy OS environment
-  runtime                = "bun"
-  moduleFormat           = "esm"
-  importFileExtension    = "ts"
-  generatedFileExtension = "ts"
+  provider = "prisma-client-js"
+  output   = "./generated/client"
 }
 
 datasource db {
   provider = "postgresql"
-  // Note: url is handled in your prisma.config.ts for Prisma 7
+  // 🔌 Connection URL is handled in server.ts and seed.ts via the adapter
 }
 
 model User {
   id           String        @id @default(uuid())
   email        String        @unique
-  password     String?       // 🔥 PHASE 4: Added for real Authentication
+  password     String?       
   balance      Float         @default(0.0)
   role         String        @default("OPERATOR")
   bookings     Booking[]
@@ -56,7 +51,7 @@ model Transaction {
   user      User     @relation(fields: [userId], references: [id])
   userId    String
   amount    Float
-  type      String   // TOPUP, WITHDRAW, BOOKING
+  type      String   
   status    String   @default("SUCCESS")
   upiRef    String?
   createdAt DateTime @default(now())
