@@ -101,7 +101,7 @@ app.post("/api/auth/register", async (req, res) => {
 app.post("/api/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await prisma.user.findUnique({ where: { id: email } }); // Check by email
+    const user = await prisma.user.findUnique({ where: { id: email } }); 
     const foundUser = user || await prisma.user.findUnique({ where: { email } });
     
     if (!foundUser || !foundUser.password) return res.status(400).json({ error: "Invalid credentials." });
@@ -129,9 +129,7 @@ app.get("/api/bookings", authenticate, async (req: any, res) => {
   try {
     const bookings = await prisma.booking.findMany({ 
       where: { userId: req.user.userId }, 
-      include: { 
-        station: true // 🔥 NECESSARY: Joins station name/address for UI cards
-      }, 
+      include: { station: true }, 
       orderBy: { createdAt: 'desc' } 
     });
     res.json(bookings);
@@ -149,15 +147,11 @@ app.post("/api/bookings", authenticate, async (req: any, res) => {
       const user = await tx.user.findUnique({ where: { id: req.user.userId } });
       if (!user || user.balance < SWAP_FEE) throw new Error("Insufficient balance in wallet.");
 
-      // 1. Deduct Capital
       await tx.user.update({ where: { id: user.id }, data: { balance: { decrement: SWAP_FEE } } });
-      
-      // 2. Log Transaction
       await tx.transaction.create({ 
         data: { userId: user.id, amount: SWAP_FEE, type: "BOOKING", status: "SUCCESS" } 
       });
       
-      // 3. Update Hardware State
       const station = await tx.station.update({ 
         where: { id: stationId }, 
         data: { availableBatteries: { decrement: 1 } } 
@@ -165,7 +159,6 @@ app.post("/api/bookings", authenticate, async (req: any, res) => {
 
       if (station.availableBatteries < 0) throw new Error("Node currently depleted. Transaction reversed.");
 
-      // 4. Create Allocation
       return await tx.booking.create({ 
         data: { 
           userId: user.id, 
@@ -173,12 +166,12 @@ app.post("/api/bookings", authenticate, async (req: any, res) => {
           status: "CONFIRMED", 
           expiresAt: new Date(Date.now() + 30 * 60000) 
         },
-        include: { station: true } // Return full object for instant UI update
+        include: { station: true }
       });
     });
 
-    // 🔄 Sync Global Grid
-    io.emit("grid_update", { message: "Node secured by operative." });
+    // 🔄 Sync Global Grid + Admin Feed
+    io.emit("grid_update", { type: "ACTIVITY", message: "New Node Allocation" });
     res.json(result);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -195,6 +188,40 @@ app.get("/api/transactions", authenticate, async (req: any, res) => {
     res.json(transactions);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch ledger history." });
+  }
+});
+
+// 👑 ADMIN: GRID STATISTICS (The Fix for the 0 Cards)
+app.get("/api/admin/stats", authenticateAdmin, async (req, res) => {
+  try {
+    const totalNodes = await prisma.station.count();
+    const activeBookings = await prisma.booking.count({ where: { status: "CONFIRMED" } });
+    const revenueData = await prisma.transaction.aggregate({
+      where: { type: "BOOKING", status: "SUCCESS" },
+      _sum: { amount: true }
+    });
+
+    res.json({
+      totalUsers: totalNodes, // Frontend card uses 'totalUsers' for the Node count
+      totalBookings: activeBookings,
+      totalRevenue: revenueData._sum.amount || 0
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to aggregate stats." });
+  }
+});
+
+// 🛡️ ADMIN: LIVE GRID ACTIVITY
+app.get("/api/admin/activity", authenticateAdmin, async (req, res) => {
+  try {
+    const activities = await prisma.transaction.findMany({
+      take: 10,
+      orderBy: { createdAt: 'desc' },
+      include: { user: { select: { email: true } } }
+    });
+    res.json(activities);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch grid activity." });
   }
 });
 
@@ -224,11 +251,11 @@ app.post("/api/payments/verify", authenticate, async (req: any, res) => {
     })
   ]);
 
-  io.emit("grid_update", { message: "Capital injected into system." });
+  io.emit("grid_update", { type: "ACTIVITY", message: "Capital Injection Verified" });
   res.json({ success: true });
 });
 
-// 🔋 IoT HARDWARE INTERFACE
+// 🔋 IoT WEBHOOK
 app.post("/api/iot/update", async (req, res) => {
   const { secret, stationId, batteries } = req.body;
   if (secret !== "super-secret-iot-key") return res.status(403).json({ error: "Unauthorized Hardware Identity." });
@@ -239,8 +266,7 @@ app.post("/api/iot/update", async (req, res) => {
       data: { availableBatteries: batteries }
     });
 
-    console.log(`[IoT SYNC] ⚡ Node ${updated.name}: Status Updated to ${batteries} units.`);
-    io.emit("grid_update", { message: "Hardware telemetry received." });
+    io.emit("grid_update", { type: "ACTIVITY", message: `Node ${updated.name} Telemetry Sync` });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: "Hardware cloud sync failed." });
