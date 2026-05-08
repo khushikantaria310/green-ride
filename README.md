@@ -15,12 +15,16 @@ Quick Start
 Make sure PostgreSQL is running and your `.env` is configured.
 
 ```bash
-# Terminal 1: Start the Brain (Backend)
+# 1. Clone the repository
+git clone [https://github.com/khushikantaria310/green-ride.git](https://github.com/khushikantaria310/green-ride.git)
+cd green-ride
+
+# 2. Terminal 1: Start the Brain (Backend)
 cd backend
 bun install
 bun run server.ts
 
-# Terminal 2: Start the Face (Frontend)
+# 3. Terminal 2: Start the Face (Frontend)
 cd frontend
 bun install
 bun run dev
