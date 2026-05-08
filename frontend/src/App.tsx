@@ -50,6 +50,13 @@ export default function App() {
   const [showTopUp, setShowTopUp] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
 
+  // 📡 Real-time Clock for Countdowns
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     const fetchLiveInfrastructure = async () => {
       try {
@@ -69,24 +76,6 @@ export default function App() {
       s.city.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [stations, searchQuery]);
-
-  useEffect(() => {
-    const depleted = stations.find(s => s.availableBatteries === 0);
-    if (depleted) {
-      toast.error(`NODE DEPLETED: ${depleted.name}`, {
-        description: `Critical intervention required in ${depleted.city}.`,
-        icon: <ShieldAlert size={16} className="text-[#fda4af]" />,
-        duration: 5000,
-        style: {
-          background: '#161921',
-          border: '1px solid #334155',
-          color: 'white',
-          borderRadius: '20px',
-          boxShadow: 'none'
-        }
-      });
-    }
-  }, [stations]);
 
   useEffect(() => {
     if (profile?.balance !== undefined) setBalance(profile.balance);
@@ -115,9 +104,7 @@ export default function App() {
   if (!isLoggedIn) {
     return (
       <main className="relative w-screen h-screen bg-[#0a0b10] flex flex-col items-center justify-center overflow-hidden font-geist">
-        <Toaster position="top-right" theme="dark" />
         <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(#ffffff08_1px,transparent_1px)] bg-[size:32px_32px]" />
-        
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-[#161921] border border-white/10 rounded-[32px] p-10 max-w-md w-full z-10">
           <div className="flex flex-col items-center mb-10 text-center">
             <div className="w-16 h-16 rounded-2xl bg-[#A7C7E7] flex items-center justify-center mb-6">
@@ -126,7 +113,6 @@ export default function App() {
             <h2 className="text-2xl font-black text-white uppercase tracking-tighter">System Access</h2>
             <p className="text-gray-500 text-sm mt-2 font-mono">ENCRYPTED NODE INITIALIZATION</p>
           </div>
-
           <form className="space-y-6" onSubmit={handleAuth}>
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2">Email Identity</label>
@@ -174,7 +160,6 @@ export default function App() {
             </div>
             <span className="text-white font-black text-xl uppercase tracking-tighter">GreenRide</span>
           </div>
-
           <div className="hidden lg:flex items-center gap-1 bg-[#161921] p-1 rounded-2xl border border-white/5">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -186,7 +171,6 @@ export default function App() {
               );
             })}
           </div>
-
           <button onClick={() => { localStorage.removeItem('token'); setIsLoggedIn(false); }} className="px-6 py-2.5 bg-[#161921] text-white text-[10px] font-black uppercase tracking-widest rounded-xl border border-white/5 hover:bg-[#fda4af] hover:text-[#0a0b10] transition-colors">
             Terminate
           </button>
@@ -194,7 +178,6 @@ export default function App() {
       </nav>
 
       <div className="max-w-[1400px] mx-auto pt-10 px-6">
-        
         {/* 🗺️ MAP TAB */}
         {activeTab === 'Map' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -211,30 +194,23 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 w-full max-w-md">
-                <div className="relative flex-1">
+              <div className="w-full max-w-md">
+                <div className="relative">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" size={16} />
-                  <input 
-                    type="text" 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search Grid City..." 
-                    className="w-full bg-[#0a0b10] border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-white text-xs font-black uppercase tracking-widest focus:border-[#A7C7E7] transition-colors outline-none"
-                  />
+                  <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search Grid City..." className="w-full bg-[#0a0b10] border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-white text-xs font-black uppercase tracking-widest focus:border-[#A7C7E7] transition-colors outline-none" />
                 </div>
-                <button 
-                  onClick={() => setSearchQuery('')}
-                  className="p-4 bg-[#0a0b10] rounded-2xl text-gray-500 hover:text-white border border-white/5 transition-colors"
-                  title="Show All Nodes"
-                >
-                  <Globe size={18} />
-                </button>
-              </div>
-
-              <div className="flex gap-4">
-                <div className="bg-[#0a0b10] border border-white/5 p-4 rounded-2xl min-w-[120px] text-center">
-                  <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Grid Load</p>
-                  <p className="text-2xl font-black text-[#A7C7E7] font-mono">24%</p>
+                {/* 🏙️ NEW: Phase 3 Quick City Filters */}
+                <div className="flex gap-2 mt-4 overflow-x-auto pb-2 scrollbar-hide">
+                  {['Bengaluru', 'Hyderabad', 'Chennai', 'Mumbai'].map((city) => (
+                    <button key={city} onClick={() => setSearchQuery(city)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border whitespace-nowrap ${searchQuery === city ? 'bg-[#A7C7E7] text-[#0a0b10] border-[#A7C7E7]' : 'bg-[#0a0b10] text-gray-500 border-white/5 hover:border-white/20'}`}>
+                      {city}
+                    </button>
+                  ))}
+                  {searchQuery && (
+                    <button onClick={() => setSearchQuery('')} className="px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest bg-[#fda4af]/10 text-[#fda4af] border border-[#fda4af]/20">
+                      Clear
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -254,31 +230,34 @@ export default function App() {
                 <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Matrix Allocations</h2>
               </div>
               {!bookings || bookings.length === 0 ? (
-                <div className="text-center py-24 border border-dashed border-white/10 rounded-2xl bg-[#0a0b10] text-gray-600 font-mono">NO ACTIVE RESERVATIONS DETECTED.</div>
+                <div className="text-center py-24 border border-dashed border-white/10 rounded-2xl bg-[#0a0b10] text-gray-600 font-mono text-[10px] uppercase tracking-widest">NO ACTIVE RESERVATIONS DETECTED.</div>
               ) : (
                 <div className="grid gap-4">
-                  {bookings.map((booking: any, index: number) => (
-                    <motion.div 
-                      key={booking.id} 
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="p-6 bg-[#0a0b10] rounded-2xl border border-white/5 flex justify-between items-center cursor-default"
-                    >
-                      <div>
-                        <span className="text-[10px] font-black text-[#A7C7E7] uppercase tracking-widest px-3 py-1 bg-[#A7C7E7]/10 rounded-lg flex items-center gap-2 w-max">
-                          <Zap size={10} /> ID: {booking.id.slice(0,8)}
-                        </span>
-                        <h3 className="text-xl font-black text-white uppercase tracking-tighter mt-3 flex items-center gap-2">
-                          <Activity size={16} className="text-[#A7C7E7]"/> {booking.status}
-                        </h3>
-                      </div>
-                      <div className="text-right flex flex-col items-end gap-1">
-                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1 flex items-center gap-1"><Clock size={10}/> Time Remaining</p>
-                        <p className="text-3xl font-black text-[#fda4af] font-mono">14:52</p>
-                      </div>
-                    </motion.div>
-                  ))}
+                  {bookings.map((booking: any, index: number) => {
+                    const expiresAt = new Date(booking.expiresAt).getTime();
+                    const diff = Math.max(0, expiresAt - now.getTime());
+                    const m = Math.floor(diff / 60000);
+                    const s = Math.floor((diff % 60000) / 1000);
+                    
+                    return (
+                      <motion.div key={booking.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }} className="p-6 bg-[#0a0b10] rounded-2xl border border-white/5 flex justify-between items-center">
+                        <div>
+                          <span className="text-[10px] font-black text-[#A7C7E7] uppercase tracking-widest px-3 py-1 bg-[#A7C7E7]/10 rounded-lg flex items-center gap-2 w-max">
+                            <Zap size={10} /> ID: {booking.id.slice(0,8)}
+                          </span>
+                          <h3 className="text-xl font-black text-white uppercase tracking-tighter mt-3 flex items-center gap-2">
+                            <Activity size={16} className="text-[#A7C7E7]"/> {booking.station?.name || 'CONFIRMED'}
+                          </h3>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1 flex items-center justify-end gap-1"><Clock size={10}/> Remaining</p>
+                          <p className={`text-3xl font-black font-mono ${diff < 300000 ? 'text-[#fda4af]' : 'text-white'}`}>
+                            {m}:{s.toString().padStart(2, '0')}
+                          </p>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -313,13 +292,7 @@ export default function App() {
               </div>
               <div className="p-6 space-y-4">
                 {transactions?.map((tx: any, index: number) => (
-                  <motion.div 
-                    key={tx.id} 
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="flex justify-between items-center p-6 bg-[#0a0b10] rounded-2xl border border-white/5 cursor-default"
-                  >
+                  <motion.div key={tx.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }} className="flex justify-between items-center p-6 bg-[#0a0b10] rounded-2xl border border-white/5">
                     <div>
                       <p className="font-black text-white tracking-widest uppercase text-sm flex items-center gap-2">
                         <Activity size={14} className="text-[#A7C7E7]" /> TXN_{tx.id.slice(0, 8)}
@@ -344,17 +317,38 @@ export default function App() {
 
         {/* 👤 PROFILE TAB */}
         {activeTab === 'Profile' && (
-          <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto">
-            <div className="bg-[#161921] rounded-[32px] p-12 border border-white/5 text-center">
-              <div className="w-24 h-24 rounded-full bg-[#A7C7E7] mx-auto flex items-center justify-center font-black text-4xl mb-6 text-[#0a0b10]">
-                {profile?.email?.charAt(0).toUpperCase()}
-              </div>
-              <h2 className="text-3xl font-black text-white uppercase tracking-tighter">{profile?.email}</h2>
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#A7C7E7]/10 rounded-xl border border-[#A7C7E7]/20 mt-4">
-                <ShieldCheck size={16} className="text-[#A7C7E7]" />
-                <span className="text-[10px] font-black text-[#A7C7E7] uppercase tracking-widest">{profile?.role}</span>
+          <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto space-y-6">
+            <div className="bg-[#161921] rounded-[32px] p-12 border border-white/5 text-center relative overflow-hidden">
+              <div className="absolute -top-24 -right-24 w-48 h-48 bg-[#A7C7E7]/10 blur-[100px] rounded-full" />
+              <div className="relative z-10">
+                <div className="w-24 h-24 rounded-full bg-[#A7C7E7] mx-auto flex items-center justify-center font-black text-4xl mb-6 text-[#0a0b10] shadow-[0_0_30px_rgba(167,199,231,0.2)]">
+                  {profile?.email?.charAt(0).toUpperCase()}
+                </div>
+                <h2 className="text-3xl font-black text-white uppercase tracking-tighter">{profile?.email}</h2>
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#A7C7E7]/10 rounded-xl border border-[#A7C7E7]/20 mt-4">
+                  <ShieldCheck size={16} className="text-[#A7C7E7]" />
+                  <span className="text-[10px] font-black text-[#A7C7E7] uppercase tracking-widest">{profile?.role}</span>
+                </div>
               </div>
             </div>
+
+            {/* 🌱 Phase 1: Sustainability Impact Card */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-[#161921] rounded-[24px] p-8 border border-white/5 text-center">
+                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-2">Total Node Swaps</p>
+                <p className="text-4xl font-black text-white tracking-tighter">{bookings?.length || 0}</p>
+              </div>
+              <div className="bg-[#161921] rounded-[24px] p-8 border border-[#A7C7E7]/20 text-center relative overflow-hidden">
+                <div className="absolute inset-0 bg-emerald-500/5" />
+                <p className="text-[10px] text-emerald-400/60 font-black uppercase tracking-widest mb-2 flex items-center justify-center gap-2">
+                   <Zap size={10} fill="currentColor" /> CO2 Offset
+                </p>
+                <p className="text-4xl font-black text-emerald-400 tracking-tighter relative z-10">
+                  {((bookings?.length || 0) * 2.4).toFixed(1)}<span className="text-sm ml-1 text-emerald-400/50">KG</span>
+                </p>
+              </div>
+            </div>
+            <p className="text-center text-[10px] text-gray-600 font-mono uppercase tracking-[0.2em]">Operative contribution to a decarbonized future.</p>
           </motion.div>
         )}
 
@@ -391,11 +385,7 @@ export default function App() {
 
       <AnimatePresence>
         {selectedStation && (
-          <BookingOverlay 
-            station={selectedStation} 
-            onClose={() => setSelectedStation(null)} 
-            onConfirm={() => { setPaymentStation(selectedStation); setSelectedStation(null); }} 
-          />
+          <BookingOverlay station={selectedStation} onClose={() => setSelectedStation(null)} onConfirm={() => { setPaymentStation(selectedStation); setSelectedStation(null); }} />
         )}
       </AnimatePresence>
 
