@@ -4,12 +4,125 @@
 
 :root {
   color-scheme: dark;
+  /* 🌊 Pastel Blue Core */
+  --pulse-color: #60a5fa; 
 }
 
 body {
   margin: 0;
-  background-color: #0a0b10; /* status-bg */
+  /* 🔥 Premium Brutalist Background */
+  background-color: #0a0b10;
+  background-image: radial-gradient(#ffffff10 1px, transparent 1px);
+  background-size: 32px 32px;
   color: white;
+  font-family: 'Geist', sans-serif; /* Enforcing your specific typography */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* 🛡️ Global Selection Style */
+::selection {
+  background-color: #60a5fa; 
+  color: #0a0b10;
+}
+
+/* 🔋 LIVE PULSE & MAP ANIMATIONS */
+@keyframes pulse-ring {
+  0% { transform: scale(0.33); opacity: 0.7; }
+  80%, 100% { transform: scale(2.5); opacity: 0; }
+}
+
+@keyframes pulse-dot {
+  0% { transform: scale(0.8); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(0.8); }
+}
+
+.marker-pulse-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Fixed typo from justify-center */
+  width: 24px;
+  height: 24px;
+}
+
+.marker-pulse-ring {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background-color: var(--pulse-color);
+  animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+.marker-pulse-dot {
+  width: 10px;
+  height: 10px;
+  background-color: var(--pulse-color);
+  border-radius: 50%;
+  border: 2px solid #0a0b10;
+  z-index: 2;
+  animation: pulse-dot 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+}
+
+/* 🗺️ LEAFLET UI OVERRIDES */
+.custom-leaflet-icon {
+  background: none;
+  border: none;
+}
+
+/* Removes Leaflet's default white tooltip styling so our custom dark one works */
+.leaflet-tooltip.custom-tooltip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.leaflet-tooltip.custom-tooltip::before {
+  display: none !important; /* Hides the little white triangle arrow */
+}
+
+/* ✨ SHIMMER, GLOW, & UI ANIMATIONS */
+@keyframes shimmer {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+@keyframes pulsing {
+  0% { transform: scale(0.98); opacity: 0.9; }
+  50% { transform: scale(1.02); opacity: 1; }
+  100% { transform: scale(0.98); opacity: 0.9; }
+}
+
+.animate-shimmering {
+  animation: shimmer 2s infinite linear;
+}
+
+.animate-pulsing {
+  animation: pulsing 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+}
+
+.bg-shimmering {
+  position: relative;
+  overflow: hidden;
+}
+
+.bg-shimmering::after {
+  content: "";
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.05) 50%, transparent 100%);
+  background-size: 200% auto;
+  animation: shimmer 2s infinite linear;
+}
+
+/* 🔥 Custom utility classes for UI emphasis */
+.success-badge {
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.3) 50%, rgba(16, 185, 129, 0.1) 100%);
+  background-size: 200% auto;
+  animation: shimmer 2.5s infinite linear;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
 }

@@ -1,6 +1,7 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { io } from 'socket.io-client';
+import { toast } from 'sonner';
 
 const API_URL = 'http://localhost:5000/api';
 const SOCKET_URL = 'http://localhost:5000';
@@ -10,23 +11,27 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000,
 });
 
-const fetchWithAuth = async (endpoint: string) => {
+// 🛠️ Improved fetch helper to catch real server errors (like Insufficient Balance)
+const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
   const token = localStorage.getItem('token');
   const res = await fetch(`${API_URL}${endpoint}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
   });
-  if (!res.ok) throw new Error("Unauthorized");
-  return res.json();
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Network error");
+  return data;
 };
 
 export const useStations = () => {
   return useQuery({
     queryKey: ['stations'],
-    queryFn: async () => {
-      const res = await fetch(`${API_URL}/stations`);
-      if (!res.ok) throw new Error("Failed to fetch stations");
-      return res.json();
-    }
+    queryFn: () => fetchWithAuth('/stations'),
   });
 };
 
@@ -54,12 +59,32 @@ export const useMyProfile = () => {
   });
 };
 
-// 🔥 NEW: Fetch Admin Stats (Only runs if isAdmin is true!)
+// 🔥 NEW: Mutation to actually CREATE a booking in the DB
+export const useCreateBooking = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (stationId: string) => fetchWithAuth('/bookings', {
+      method: 'POST',
+      body: JSON.stringify({ stationId }),
+    }),
+    onSuccess: () => {
+      // Refresh everything so the map and wallet update instantly
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['stations'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      toast.success("Node Secured! Your battery is reserved.");
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    }
+  });
+};
+
 export const useAdminStats = (isAdmin: boolean) => {
   return useQuery({
     queryKey: ['adminStats'],
     queryFn: () => fetchWithAuth('/admin/stats'),
-    enabled: isAdmin, // Will not even try to fetch if not an Admin
+    enabled: isAdmin,
     retry: false
   });
 };
@@ -70,13 +95,11 @@ export const useNetworkSocket = () => {
   useEffect(() => {
     socket.on('connect', () => console.log('⚡ Connected to GreenRide Live Grid'));
 
-    socket.on('grid_update', () => {
-      console.log('🔄 Grid state changed! Force refreshing UI...');
+    socket.on('grid_update', (data) => {
+      console.log('🔄 Grid update received:', data.message);
       queryClient.invalidateQueries({ queryKey: ['stations'] });
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
-      queryClient.invalidateQueries({ queryKey: ['adminStats'] }); // Refresh admin stats too!
     });
 
     return () => {

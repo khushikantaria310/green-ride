@@ -1,97 +1,111 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
+import { useEffect, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
-// Fix for default Leaflet icons
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
-
-// 🔥 Updated to match your DB schema (batteries instead of slots)
-const createCustomIcon = (batteries: number) => {
-  const color = batteries > 5 ? '#4d6af2' : batteries > 0 ? '#f59e0b' : '#ef4444';
-  return L.divIcon({
-    className: 'custom-div-icon',
-    html: `<div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 15px ${color}; transition: all 0.5s ease;"></div>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-  });
-};
-
-// 🔥 Added the 'stations' prop so it receives data from App.tsx
 interface MapViewProps {
   stations: any[];
   onSelectStation: (station: any) => void;
 }
 
 export default function MapView({ stations, onSelectStation }: MapViewProps) {
-  // Center of South India
-  const center = { lat: 12.9716, lng: 77.5946 };
-  
-  const activeStations = stations || [];
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    
+    // Clean up Leaflet default icons safely
+    delete (L.Icon.Default.prototype as any)._getIconUrl;
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+      iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+    });
+  }, []);
+
+  if (!mounted) return null;
+
+  // 🌊 True Flat Pastel Icon Generator (Zero Glow, Zero Animation)
+  const createFlatIcon = (availableBatteries: number) => {
+    const isCritical = availableBatteries === 0;
+    // Ultra-light pastel hex codes
+    const pastelColor = isCritical ? '#fda4af' : '#A7C7E7'; 
+
+    return L.divIcon({
+      className: 'bg-transparent border-0', 
+      html: `
+        <div class="relative flex items-center justify-center w-6 h-6">
+          <div class="rounded-full" style="width: 14px; height: 14px; background-color: ${pastelColor}; border: 2px solid #0a0b10;"></div>
+        </div>
+      `,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+  };
+
+  const mapCenter: [number, number] = [12.9716, 77.5946]; 
 
   return (
-    <div className="w-full h-[600px] rounded-[40px] overflow-hidden relative z-0 bg-[#161921]">
-      <MapContainer 
-        center={[center.lat, center.lng]} 
-        zoom={6} // 🔥 Zoomed out to 6 so you can see all of South India!
-        style={{ height: '100%', width: '100%', zIndex: 0 }}
-      >
-        <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
-        />
-        
-        {activeStations.map((station: any) => {
-          // Safety check: skip rendering if coordinates are missing
-          if (!station.latitude || !station.longitude) return null;
+    <MapContainer 
+      center={mapCenter} 
+      zoom={6} 
+      style={{ height: '100%', width: '100%', zIndex: 0, backgroundColor: '#0a0b10' }}
+      zoomControl={false} 
+    >
+      <TileLayer
+        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
+      />
 
-          return (
-            <Marker 
-              key={station.id} 
-              // 🔥 Swapped to your Prisma DB fields
-              position={[station.latitude, station.longitude]}
-              icon={createCustomIcon(station.availableBatteries)}
+      {stations.map((station) => {
+        // 🔥 Force coordinates to be numbers 
+        const lat = Number(station.latitude);
+        const lng = Number(station.longitude);
+        
+        // Safety check
+        if (isNaN(lat) || isNaN(lng)) return null;
+
+        return (
+          <Marker 
+            key={station.id} 
+            position={[lat, lng]}
+            icon={createFlatIcon(station.availableBatteries)}
+            eventHandlers={{
+              click: () => {
+                if (station.availableBatteries > 0) {
+                  onSelectStation(station);
+                }
+              },
+            }}
+          >
+            {/* Sleek Dark Mode Hover Tooltip */}
+            <Tooltip 
+              direction="top" 
+              offset={[0, -15]} 
+              opacity={1}
+              className="custom-tooltip"
             >
-              <Popup className="status-popup">
-                <div className="p-3 font-sans w-48">
-                  <div className="inline-block px-2 py-0.5 bg-green-500/10 text-green-600 rounded text-[10px] font-bold uppercase tracking-widest mb-2">
-                    {station.status || 'Live'}
-                  </div>
-                  <h3 className="font-bold text-lg leading-tight truncate" title={station.name}>
-                    {station.name}
-                  </h3>
-                  
-                  {/* 🔥 Replaced mock distance with the Real City/State from DB */}
-                  <p className="text-gray-500 text-xs mt-1 mb-4 truncate">
-                    {station.city}, {station.state}
-                  </p>
-                  
-                  <div className="flex items-center justify-between mb-4 bg-gray-50 p-2 rounded-xl">
-                    <span className="text-xl">🔋</span>
-                    <div className="text-right">
-                      <span className="block font-bold text-lg leading-none">{station.availableBatteries}</span>
-                      <span className="text-[10px] text-gray-500 uppercase tracking-wider">Batteries left</span>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => onSelectStation(station)}
-                    disabled={station.availableBatteries === 0}
-                    className="w-full bg-[#4d6af2] text-white py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {station.availableBatteries === 0 ? 'Depleted' : 'Reserve Node'}
-                  </button>
+              <div className="bg-[#161921] border border-[#334155] px-4 py-3 rounded-xl min-w-[140px]">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`w-2 h-2 rounded-full ${station.availableBatteries === 0 ? 'bg-[#fda4af]' : 'bg-[#A7C7E7]'}`}></span>
+                  <p className="text-[10px] font-black text-white uppercase tracking-widest truncate">{station.name}</p>
                 </div>
-              </Popup>
-            </Marker>
-          );
-        })}
-      </MapContainer>
-    </div>
+                <p className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">{station.city}</p>
+                
+                <p className={`text-sm font-black font-mono mt-3 ${station.availableBatteries === 0 ? 'text-[#fda4af]' : 'text-[#A7C7E7]'}`}>
+                  {station.availableBatteries} UNITS LIVE
+                </p>
+                
+                <p className="text-[8px] text-gray-600 uppercase tracking-widest mt-2 border-t border-white/5 pt-2">
+                  {station.availableBatteries > 0 ? 'Click to Reserve Node' : 'Node Depleted'}
+                </p>
+              </div>
+            </Tooltip>
+          </Marker>
+        );
+      })}
+    </MapContainer>
   );
 }

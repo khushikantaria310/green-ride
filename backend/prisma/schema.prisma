@@ -1,3 +1,6 @@
+// 🔌 GreenRide Database Schema
+// Optimized for PostgreSQL + Prisma
+
 generator client {
   provider = "prisma-client-js"
   output   = "./generated/client"
@@ -5,20 +8,29 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // 🔌 Connection URL is handled in server.ts and seed.ts via the adapter
 }
 
+// 🛡️ ROLE DEFINITIONS
+enum Role {
+  USER
+  ADMIN
+  OPERATOR
+}
+
+// 👤 USER HIERARCHY
 model User {
-  id           String        @id @default(uuid())
-  email        String        @unique
-  password     String?       
-  balance      Float         @default(0.0)
-  role         String        @default("OPERATOR")
-  bookings     Booking[]
-  transactions Transaction[]
-  createdAt    DateTime      @default(now())
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String         // Mandatory for session initialization
+  balance       Float          @default(0.0)
+  role          Role           @default(USER)
+  bookings      Booking[]
+  transactions  Transaction[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 }
 
+// 🔋 PHYSICAL INFRASTRUCTURE
 model Station {
   id                 String    @id @default(uuid())
   externalId         Int       @unique
@@ -30,29 +42,33 @@ model Station {
   longitude          Float
   operatorName       String?
   availableBatteries Int       @default(4)
-  status             String    @default("ACTIVE")
+  totalSlots         Int       @default(10) // Useful for grid capacity logic
+  status             String    @default("ACTIVE") // ACTIVE, MAINTENANCE, OFFLINE
   bookings           Booking[]
   createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 }
 
+// 📋 RESOURCE ALLOCATION
 model Booking {
   id        String   @id @default(uuid())
   user      User     @relation(fields: [userId], references: [id])
   userId    String
   station   Station  @relation(fields: [stationId], references: [id])
   stationId String
-  status    String   @default("CONFIRMED")
+  status    String   @default("CONFIRMED") // CONFIRMED, ACTIVE, COMPLETED, EXPIRED
   expiresAt DateTime
   createdAt DateTime @default(now())
 }
 
+// 💰 FINANCIAL LEDGER
 model Transaction {
   id        String   @id @default(uuid())
   user      User     @relation(fields: [userId], references: [id])
   userId    String
   amount    Float
-  type      String   
+  type      String   // TOPUP, WITHDRAW, BOOKING_FEE
   status    String   @default("SUCCESS")
-  upiRef    String?
+  upiRef    String?  @unique
   createdAt DateTime @default(now())
 }
